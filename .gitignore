@@ -1,0 +1,16 @@
+node_modules/
+coverage/
+.test-artifacts/
+dist/
+*.log
+*.tgz
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+.magpie-quality-monitor/
+.env
+.env.*
+!.env.example
+
+# page/index.html is tracked as a harmless source placeholder. A generated
+# runtime entry cannot be protected by ignore rules; run check:privacy --staged.

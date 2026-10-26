@@ -1,0 +1,97 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1240 900" role="img" aria-labelledby="title desc">
+  <title id="title">Magpie Quality Monitor architecture</title>
+  <desc id="desc">Magpie embeds the monitor UI and hosts a local Bun service. A native-access checker gates a serial queue that invokes Codex CLI through the Magpie gateway to a provider or route. Results are locally graded or safely extracted, stored in SQLite and presented as read-only history. A separate headless-browser queue generates static thumbnails without page scripts or external requests.</desc>
+  <defs>
+    <linearGradient id="paper" x2="1" y2="1"><stop stop-color="#f8faf8"/><stop offset="1" stop-color="#edf3f4"/></linearGradient>
+    <marker id="blue" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0 8 4 0 8Z" fill="#2e6185"/></marker>
+    <marker id="green" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0 8 4 0 8Z" fill="#42775f"/></marker>
+    <marker id="gray" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0 8 4 0 8Z" fill="#7a8792"/></marker>
+    <style>
+      text{font-family:'Segoe UI',sans-serif;fill:#20313d} .h{font-size:32px;font-weight:650;letter-spacing:-.6px}
+      .label{font-size:12px;letter-spacing:1.5px;fill:#637782;font-weight:600}.name{font-size:19px;font-weight:600}
+      .body{font-size:14px;fill:#506774}.tiny{font-size:12px;fill:#637782}.zone{fill:#ffffff;fill-opacity:.7;stroke:#d8e2e5;stroke-dasharray:5 5}
+      .box{fill:#fff;stroke:#cbd7dc;stroke-width:1.3}.request{fill:none;stroke:#2e6185;stroke-width:2;marker-end:url(#blue)}
+      .result{fill:none;stroke:#42775f;stroke-width:2;marker-end:url(#green)}.meta{fill:none;stroke:#7a8792;stroke-width:1.6;stroke-dasharray:5 5;marker-end:url(#gray)}
+    </style>
+  </defs>
+  <rect width="1240" height="900" rx="18" fill="url(#paper)"/>
+  <text x="42" y="48" class="label">MAGPIE QUALITY MONITOR / SYSTEM MAP</text>
+  <text x="42" y="94" class="h">Local evidence. One request path.</text>
+  <text x="42" y="122" class="body">Windows-native integration; private state stays local, model prompts go to the selected provider.</text>
+
+  <rect x="32" y="157" width="292" height="590" rx="16" class="zone"/>
+  <text x="52" y="187" class="label">MAGPIE WINDOW + HOST</text>
+  <rect x="52" y="211" width="252" height="140" rx="11" class="box"/>
+  <text x="70" y="241" class="name">Embedded monitor UI</text>
+  <text x="70" y="269" class="body">Catalog, monitors, heatmap</text>
+  <text x="70" y="291" class="body">Read-only history + galleries</text>
+  <text x="70" y="321" class="tiny">Magpie hello/theme handshake</text>
+  <rect x="52" y="391" width="252" height="105" rx="11" class="box"/>
+  <text x="70" y="422" class="name">Plugin host</text>
+  <text x="70" y="450" class="body">Loads index.ts in Bun</text>
+  <text x="70" y="474" class="tiny">Single-owner lifecycle / shutdown</text>
+  <rect x="52" y="575" width="252" height="135" rx="11" class="box"/>
+  <text x="70" y="607" class="name">Private SQLite storage</text>
+  <text x="70" y="636" class="body">Configuration + executions</text>
+  <text x="70" y="658" class="body">Snapshots, events, PNG cache</text>
+  <text x="70" y="687" class="tiny">Retention / explicit export</text>
+
+  <rect x="365" y="157" width="490" height="590" rx="16" class="zone"/>
+  <text x="385" y="187" class="label">LOCAL BUN SERVICE / INTERNAL MODULES</text>
+  <rect x="385" y="211" width="450" height="85" rx="11" class="box"/>
+  <text x="403" y="241" class="name">Authenticated loopback API</text>
+  <text x="403" y="269" class="body">Capability + Host/Origin checks; local UI state</text>
+  <rect x="385" y="323" width="207" height="111" rx="11" class="box"/>
+  <text x="403" y="353" class="name">Native-access check</text>
+  <text x="403" y="381" class="body">Codex config: read only</text>
+  <text x="403" y="405" class="tiny">Public Magpie CLI catalog</text>
+  <rect x="619" y="323" width="216" height="111" rx="11" fill="#edf4f8" stroke="#b9cddc"/>
+  <text x="637" y="353" class="name">Serial model queue</text>
+  <text x="637" y="381" class="body">Scheduled + manual runs</text>
+  <text x="637" y="405" class="tiny">No plugin-level retry</text>
+  <rect x="385" y="473" width="450" height="91" rx="11" class="box"/>
+  <text x="403" y="505" class="name">Local result processing</text>
+  <text x="403" y="535" class="body">Logic grader / safe HTML-SVG extraction / snapshots</text>
+  <rect x="385" y="603" width="450" height="107" rx="11" fill="#eff5f0" stroke="#c0d5c7"/>
+  <text x="403" y="634" class="name">Separate screenshot queue</text>
+  <text x="403" y="662" class="body">Headless Chrome/Edge; isolated temporary profile</text>
+  <text x="403" y="688" class="tiny">Page scripts + service workers + external requests blocked</text>
+
+  <rect x="896" y="157" width="312" height="590" rx="16" class="zone"/>
+  <text x="916" y="187" class="label">AGENT + UPSTREAM REQUESTS</text>
+  <rect x="916" y="323" width="272" height="111" rx="11" fill="#edf4f8" stroke="#b9cddc"/>
+  <text x="934" y="353" class="name">Native Codex CLI</text>
+  <text x="934" y="381" class="body">codex exec / ephemeral run</text>
+  <text x="934" y="405" class="tiny">Inherited native authentication</text>
+  <rect x="916" y="473" width="272" height="91" rx="11" class="box"/>
+  <text x="934" y="505" class="name">Magpie gateway</text>
+  <text x="934" y="535" class="body">Existing routing / provider auth</text>
+  <rect x="916" y="603" width="272" height="107" rx="11" class="box"/>
+  <text x="934" y="634" class="name">Provider / model / route</text>
+  <text x="934" y="662" class="body">Receives the question prompt</text>
+  <text x="934" y="688" class="tiny">Model quota and costs may apply</text>
+
+  <path d="M304 253H383" class="meta"/>
+  <text x="315" y="239" class="tiny">API</text>
+  <path d="M304 443H344V282H383" class="meta"/>
+  <path d="M610 296V310H489V321" class="meta"/>
+  <path d="M592 378H617" class="request"/>
+  <path d="M835 378H914" class="request"/>
+  <text x="845" y="363" class="tiny">stdin</text>
+  <path d="M1052 434V471" class="request"/>
+  <path d="M1052 564V601" class="request"/>
+  <path d="M1188 378H1222V775H878V519H837" class="result"/>
+  <text x="902" y="794" class="tiny">Returned answer + reported usage</text>
+  <path d="M610 564V601" class="result"/>
+  <path d="M385 519H344V622H306" class="result"/>
+  <path d="M385 672H306" class="result"/>
+  <path d="M304 610H355V267H383" class="meta"/>
+  <text x="65" y="535" class="tiny">UI artwork: empty-permission iframe</text>
+  <text x="65" y="552" class="tiny">Sanitized HTML/SVG; no remote loads</text>
+
+  <path d="M42 828H1198" stroke="#d5dfe3"/>
+  <path d="M44 854H83" class="request"/><text x="95" y="859" class="tiny">Request path</text>
+  <path d="M274 854H313" class="result"/><text x="325" y="859" class="tiny">Results / cache</text>
+  <path d="M507 854H546" class="meta"/><text x="558" y="859" class="tiny">Lifecycle / local data</text>
+  <text x="825" y="859" class="tiny">Expected answers stay in the local grader.</text>
+</svg>

@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <style>
+      html,
+      body {
+        margin: 0;
+        background: #eef5ef;
+        color: #213b42;
+        font-family: sans-serif;
+      }
+      body {
+        min-height: 100vh;
+        display: grid;
+        place-items: center;
+      }
+      svg {
+        display: block;
+        width: 100%;
+        max-width: 900px;
+        height: auto;
+      }
+    </style>
+  </head>
+  <body>
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      xmlns:xlink="http://www.w3.org/1999/xlink"
+      viewBox="0 0 900 520"
+      role="img"
+      aria-label="Synthetic geometric motion fixture"
+    >
+      <defs>
+        <linearGradient id="sky" x2="0" y2="1">
+          <stop stop-color="#ceeae7" />
+          <stop offset="1" stop-color="#f2e9cc" />
+        </linearGradient>
+        <filter id="shadow">
+          <feGaussianBlur in="SourceAlpha" stdDeviation="2" result="blur" />
+          <feOffset in="blur" dx="0" dy="4" result="offset" />
+          <feBlend in="SourceGraphic" in2="offset" mode="normal" />
+        </filter>
+        <g
+          id="wheelArtwork"
+          fill="none"
+          stroke="#264c59"
+          stroke-width="4"
+          stroke-linecap="round"
+        >
+          <circle r="64" />
+          <circle r="48" stroke="#5e9c95" stroke-width="2" />
+          <path
+            d="M-46 0H46M0-46V46M-32-32 32 32M-32 32 32-32"
+            stroke="#5e9c95"
+            stroke-width="2"
+          />
+        </g>
+        <g
+          id="tile"
+          fill="#5d958a"
+          stroke="#23434a"
+          stroke-width="2"
+          stroke-linecap="round"
+        >
+          <rect x="-13" y="-13" width="26" height="26" rx="5" />
+        </g>
+        <g id="dot" fill="#e6b16b"><circle r="8" /></g>
+      </defs>
+      <rect width="900" height="520" fill="url(#sky)" />
+      <circle cx="740" cy="95" r="42" fill="#eed18d" />
+      <path d="M0 355Q230 320 450 350T900 335V520H0Z" fill="#387b75" />
+      <path d="M0 430H900V490H0Z" fill="#25474d" />
+      <g filter="url(#shadow)">
+        <use href="#wheelArtwork" x="290" y="370" />
+        <use href="#wheelArtwork" x="610" y="370" />
+        <path
+          d="M290 370 400 215 500 370Z M400 215H535L610 370M500 370 535 215"
+          fill="none"
+          stroke="#ba6e55"
+          stroke-width="8"
+          stroke-linecap="round"
+        />
+        <path
+          d="M380 207H433M518 187H560V215"
+          fill="none"
+          stroke="#264c59"
+          stroke-width="6"
+          stroke-linecap="round"
+        />
+      </g>
+      <g fill="none" stroke="#f3ebd8" stroke-width="5">
+        <path d="M80 456H170M230 456H320M380 456H470M530 456H620M680 456H770" />
+      </g>
+      <g fill="none" stroke="#264c59" stroke-width="3">
+        <path d="M390 225Q440 170 490 225">
+          <animate
+            attributeName="d"
+            values="M390 225Q440 170 490 225;M390 225Q440 260 490 225;M390 225Q440 170 490 225"
+            dur="2s"
+            repeatCount="indefinite"
+          />
+        </path>
+        <path d="M440 225Q490 170 540 225">
+          <animate
+            attributeName="d"
+            values="M440 225Q490 170 540 225;M440 225Q490 260 540 225;M440 225Q490 170 540 225"
+            dur="2s"
+            repeatCount="indefinite"
+          />
+        </path>
+      </g>
+      <use href="#tile" x="105" y="100" />
+      <use href="#tile" x="150" y="100" />
+      <use href="#tile" x="195" y="100" />
+      <use href="#dot" x="90" y="255" />
+      <use href="#dot" x="135" y="275" />
+      <use href="#dot" x="180" y="255" />
+      <use href="#dot" x="720" y="255" />
+      <use href="#dot" x="765" y="275" />
+      <use href="#dot" x="810" y="255" />
+    </svg>
+  </body>
+</html>

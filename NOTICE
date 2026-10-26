@@ -1,0 +1,17 @@
+Magpie Quality Monitor
+
+This plugin was extracted from a Magpie development tree distributed under MIT.
+The upstream MIT notice, Copyright (c) 2026 yetone, is retained in LICENSE.
+
+Standalone documentation, architecture artwork, privacy-check tooling and new
+synthetic test fixtures: Copyright (c) 2026 gitfot, also under MIT.
+
+The catalog fixture uses invented provider/model identifiers while preserving the
+tested human-readable CLI format. The SVG fixtures are self-contained geometric
+test artwork authored for this repository. Reporter-supplied artwork, private
+catalog output, local acceptance transcripts and deployment metadata are not
+distributed in this standalone repository.
+
+Magpie and Codex are referenced to explain interoperability. Their names do not
+imply sponsorship, affiliation or official support. Third-party dependencies
+retain their own licenses; see the dependency manifests and installed notices.

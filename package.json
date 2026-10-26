@@ -1,0 +1,68 @@
+{
+  "name": "magpie-quality-monitor",
+  "scripts": {
+    "test": "node scripts/bun.mjs test",
+    "test:integration": "node scripts/bun.mjs test tests/integration.test.ts",
+    "test:ui": "node scripts/bun.mjs test tests/ui-save.test.ts tests/ui-preview.test.ts tests/ui-backend.test.ts tests/ui-compact.test.ts tests/ui-history-render.test.ts tests/ui-optimization.test.ts tests/ui-editor.test.ts tests/ui-record-sequence.test.ts",
+    "typecheck": "tsc --noEmit",
+    "format": "prettier --write src tests ui scripts index.ts agent.js package.json tsconfig.json",
+    "lint": "prettier --check src tests ui scripts index.ts agent.js package.json tsconfig.json",
+    "preview": "node scripts/bun.mjs run scripts/preview.ts",
+    "check:privacy": "node scripts/check-privacy.mjs",
+    "check:privacy:selftest": "node scripts/check-privacy.mjs --self-test"
+  },
+  "description": "Codex CLI quality monitoring inside Magpie",
+  "devDependencies": {
+    "@types/bun": "1.4.4",
+    "@types/sanitize-html": "2.16.2",
+    "playwright": "1.64.1",
+    "prettier": "3.9.10",
+    "typescript": "7.0.2"
+  },
+  "version": "0.1.0",
+  "type": "module",
+  "magpie": {
+    "page": {
+      "title": "Codex降智检测",
+      "titles": {
+        "zh": "Codex降智检测",
+        "zh-TW": "Codex降智檢測",
+        "en": "Codex Quality Monitor",
+        "ja": "Codex 品質モニター",
+        "de": "Codex Qualitätsmonitor"
+      },
+      "icon": "page/icon.svg",
+      "file": "page/index.html"
+    }
+  },
+  "dependencies": {
+    "playwright-core": "1.64.1",
+    "sanitize-html": "2.18.1"
+  },
+  "private": true,
+  "main": "index.ts",
+  "files": [
+    "index.ts",
+    "agent.js",
+    "src",
+    "ui",
+    "page",
+    "VERIFICATION.md",
+    "README.md",
+    "README.zh-CN.md",
+    "LICENSE",
+    "NOTICE",
+    "docs/architecture.svg"
+  ],
+  "packageManager": "npm@11.8.0",
+  "license": "MIT",
+  "author": "gitfot",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/gitfot/magpie-quality-monitor.git"
+  },
+  "homepage": "https://github.com/gitfot/magpie-quality-monitor#readme",
+  "bugs": {
+    "url": "https://github.com/gitfot/magpie-quality-monitor/issues"
+  }
+}

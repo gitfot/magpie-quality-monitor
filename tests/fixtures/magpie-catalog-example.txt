@@ -1,0 +1,20 @@
+  Routing groups
+  group/reasoning                Reasoning route  low/medium/high/xhigh/max/ultra
+  Example provider A
+  provider-a/model-alpha         Example Alpha  low/medium/high/xhigh/max/ultra
+  provider-a/model-beta          Example Beta  low/medium/high/xhigh/max/ultra
+  Example provider B
+  provider-b/model-alpha         Example Alpha  low/medium/high/xhigh/max/ultra
+  provider-b/model-beta          Example Beta  low/medium/high/xhigh/max/ultra
+  Example provider C
+  provider-c/model-alpha         Example Alpha  low/medium/high/xhigh/max/ultra
+  provider-c/model-beta          Example Beta  low/medium/high/xhigh/max/ultra
+  Example provider D
+  provider-d/model-delta         Example Delta  low/high/max
+  1 taken out of codex's list on the Agents page
+  codex is shown every provider's models
+  Example provider A: 2 more models in its list, not exposed (not picked): hidden-a, hidden-b
+    magpie provider models provider-a +<model> exposes one
+  Example provider B: 1 more model in its list, not exposed (not picked): hidden-c
+    magpie provider models provider-b +<model> exposes one
+  http://127.0.0.1:1234/v1
