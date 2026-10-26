@@ -11,6 +11,12 @@ dist/
 .env
 .env.*
 !.env.example
+# Secrets and local configuration
+*.pem
+*.key
+
+.idea/
+.vscode/
 
 # page/index.html is tracked as a harmless source placeholder. A generated
 # runtime entry cannot be protected by ignore rules; run check:privacy --staged.
