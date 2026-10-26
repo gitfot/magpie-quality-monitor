@@ -1,8 +1,9 @@
-import { readFileSync, realpathSync, mkdirSync } from "node:fs";
+import { mkdirSync } from "node:fs";
 import { homedir } from "node:os";
-import { dirname, join, resolve } from "node:path";
+import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { OtherParentError, startMonitor } from "./src/service.ts";
+import { installationActive } from "./src/installation.ts";
 
 const root = dirname(fileURLToPath(import.meta.url));
 export default {
@@ -13,34 +14,7 @@ export default {
   ) {
     const directory = join(homedir(), ".magpie-quality-monitor");
     mkdirSync(directory, { recursive: true, mode: 0o700 });
-    const signature = JSON.stringify(options);
-    const active = () => {
-      try {
-        const list = JSON.parse(
-          readFileSync(join(input.directory, "plugins.json"), "utf8"),
-        ).plugins;
-        return list.some(
-          (entry: { spec: string; off?: boolean; options?: unknown }) => {
-            let own =
-              entry.spec === "magpie-quality-monitor" ||
-              entry.spec.startsWith("magpie-quality-monitor@");
-            if (!own)
-              try {
-                own =
-                  realpathSync(resolve(entry.spec)).toLowerCase() ===
-                  realpathSync(root).toLowerCase();
-              } catch {}
-            return (
-              own &&
-              !entry.off &&
-              JSON.stringify(entry.options ?? {}) === signature
-            );
-          },
-        );
-      } catch {
-        return false;
-      }
-    };
+    const active = () => installationActive(input.directory, root, options);
     const launch = async (): Promise<void> => {
       if (!active()) return;
       try {

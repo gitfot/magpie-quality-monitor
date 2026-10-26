@@ -168,7 +168,13 @@ if(body.choices[0].finish_reason!=='length')out({type:'turn.completed',usage:{in
       await app.close();
       gateway.closeAllConnections();
       await new Promise<void>((r) => gateway.close(() => r()));
-      rmSync(directory, { recursive: true, force: true });
+      // Windows may briefly retain a directory lock after resources close.
+      rmSync(directory, {
+        recursive: true,
+        force: true,
+        maxRetries: 5,
+        retryDelay: 100,
+      });
     },
   };
 }

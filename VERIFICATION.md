@@ -6,8 +6,9 @@ records are intentionally excluded from the public repository.
 
 ## Scope
 
-The standalone extraction preserves the plugin's production TypeScript/JavaScript,
-CSS and HTML behavior. Documentation, package metadata and test data are adapted
+The initial standalone extraction preserved the plugin's production TypeScript/JavaScript,
+CSS and HTML behavior. Later entry-point repairs are recorded separately below.
+Documentation, package metadata and test data are adapted
 for public distribution. Catalog identifiers are invented. The geometric SVG and
 entry-animation fixtures are repository-authored substitutes for private examples;
 the tests retain structural, pixel-comparison, animation and safety assertions.
@@ -79,7 +80,7 @@ An installed plugin replaces it with a private local capability. Ignore patterns
 cannot protect a tracked file: use a separate installation directory and inspect
 the actual staged entry before every public commit.
 
-## Standalone Check Record
+## Initial Standalone Check Record
 
 Checked on Windows on 2026-10-26 with Bun 1.4.3, Node.js 24.13.1, npm 11.8.0
 and installed headless Chrome:
@@ -109,3 +110,59 @@ real-provider calls, real model quality/cost comparisons and non-Windows support
 were **not** reverified in this standalone extraction. No daily plugin or Codex
 configuration was registered, replaced or restarted for these checks. Private
 logs and screenshots are excluded from the public repository.
+
+## GitHub Installation Activation Repair
+
+The original entry point recognized a package name or local path but treated
+`github:owner/repository` as a filesystem path. It returned without starting the
+service, so the packaged startup placeholder was never replaced. This is a plugin
+entry-point issue, not missing dependencies or evidence that two installed copies
+are required to reproduce the failure.
+
+`src/installation.ts` now resolves Git specs through Bun's dependency mapping in
+the host's `plugins/package.json`, then compares the actual installed directory
+with the executing copy. Local folders, file URLs and registry package specs use
+the same identity check. Missing mappings, unreadable configuration, disabled or
+removed entries and changed options do not activate an unrelated copy.
+
+The regression command is:
+
+```powershell
+npm.cmd test -- tests/installation.test.ts --timeout 20000
+```
+
+Before the repair, its real-entry test failed because the generated startup
+redirect was absent. After the repair, all 11 installation tests pass, including
+an isolated HOME with a GitHub-style dependency binding, a disposable installed
+plugin copy, the unmocked production entry and service, a generated page redirect,
+and an authenticated API response. These checks neither download from GitHub nor
+read a daily account/configuration. No model execution or paid provider is used.
+
+Activation tests cover tagged GitHub specs, repository URLs, shorthand, other Git
+URLs, package names/versions, local paths, file URLs and multiple installed copies'
+separate enablement. This does not add simultaneous independent service support:
+all installations still share one local history directory and one service owner.
+Keep only one installation enabled when switching between local and GitHub copies.
+
+The fix has not been deployed to a daily installation, and the published GitHub
+download/update path and native desktop have not been re-exercised by these tests.
+
+Repair verification on Windows on 2026-10-26:
+
+| Check | Result |
+| --- | --- |
+| Real-entry reproduction before the production fix | Failed: the startup placeholder was not replaced |
+| Installation regressions after the fix | 11 passed, 0 failed |
+| TypeScript typecheck and Prettier lint | Passed |
+| Final full isolated suite | 107 passed, 2 optional installed-binary skips, 0 failed; 3,968 assertions across 19 files |
+| Privacy-scanner self-tests | 15 passed |
+| Intended-source privacy scan | 63 files, no configured-rule findings; unrelated untracked IDE settings excluded |
+| Local documentation links and diff whitespace | Passed |
+| Package dry-run | 27 entries; installation helper included; no tests, test artifacts or IDE configuration bundled |
+
+The first full repair run completed the screenshot-deletion assertions but failed
+in fixture teardown with Windows `EBUSY` while removing an empty temporary
+directory. The shared test fixture now uses at most five filesystem removal
+retries after awaiting resource shutdown. No production renderer or test assertion
+was relaxed. The focused screenshot-deletion test and the subsequent complete
+suite both pass; persistent cleanup errors still fail the test.

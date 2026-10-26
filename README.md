@@ -35,7 +35,7 @@ each result. No Magpie core modifications or separate provider sign-in are neede
 | Host | Windows-native Magpie with local-folder plugin support |
 | Agent | Windows-native Codex CLI connected through Magpie's **Agents** page |
 | Runtime | Bun, supplied by the Magpie plugin host; Node.js is not the runtime |
-| Dependencies | Node.js/npm to install the locked JavaScript dependencies |
+| Dependencies | Magpie manages GitHub-install dependencies; Node.js/npm is needed for manual source installation and development |
 | Thumbnails | Installed Chrome or Edge, or an explicit browser executable path |
 
 The finite CLI adapter was previously exercised with Magpie **0.1.1549** and
@@ -45,9 +45,44 @@ not supported compatibility claims. See [verification](VERIFICATION.md).
 
 ## Quick Start
 
-### 1. Prepare a stable installation folder
+### 1. Install from GitHub
 
-After this repository is published, use **Code → Download ZIP** on
+In Magpie, open **Plugins → Add plugin** and enter:
+
+```text
+github:gitfot/magpie-quality-monitor
+```
+
+Magpie downloads the repository and installs its runtime dependencies with Bun;
+you do not need to clone the repository or run npm for this installation method.
+Enable the plugin after installation. Use Magpie's **Update** action for later
+published commits, then reopen the plugin page. A local development change is
+not available to GitHub installations until it has been pushed to the repository.
+
+**Keep only one installation of this plugin enabled.** Local-folder and GitHub
+copies share the same private history directory and single-owner service. When
+switching methods, disable the previous copy before enabling the new one; do not
+delete the private history directory. Both copies may remain installed, but they
+are not independent monitors or separate data stores.
+
+### 2. Connect Codex and open the monitor
+
+1. On Magpie's **Agents** page, connect the native **Codex** agent. A WSL
+   connection or the retired monitor-specific agent is not a substitute.
+2. Open **Codex Quality Monitor**. The page displays saved history immediately
+   and checks native access/model visibility in the background. While checking,
+   the refresh button shows a spinner and cannot be clicked repeatedly.
+3. Create a monitor and select a model or route from the Codex-visible catalog.
+   New monitors start **paused**. Check the estimated request count before
+   enabling a schedule, or run a single question manually.
+
+If discovery fails, set the absolute Magpie/Codex executable paths in the plugin's
+settings. Enter an executable path, not a command line. A failed catalog refresh
+shows the reason and permits manual retry; it does not erase history.
+
+### Alternative: install from a local source folder
+
+Use **Code → Download ZIP** on
 [GitHub](https://github.com/gitfot/magpie-quality-monitor), then extract it to a
 stable, writable folder outside your development checkout. For example:
 
@@ -62,24 +97,9 @@ a published npm package or a prebuilt GitHub release.
 **Do not register a development checkout as the long-term installation.** The
 host generates `page/index.html` with a local endpoint and a temporary access
 capability. That generated file is private runtime material, not publishable
-source. A separate installation copy prevents accidentally staging it.
-
-### 2. Connect and enable the plugin
-
-1. In Magpie, open **Plugins → Add plugin**, enter the installation folder's
-   absolute path, and enable it.
-2. On Magpie's **Agents** page, connect the native **Codex** agent. A WSL
-   connection or the retired monitor-specific agent is not a substitute.
-3. Open **Codex Quality Monitor**. The page displays saved history immediately
-   and checks native access/model visibility in the background. While checking,
-   the refresh button shows a spinner and cannot be clicked repeatedly.
-4. Create a monitor and select a model or route from the Codex-visible catalog.
-   New monitors start **paused**. Check the estimated request count before
-   enabling a schedule, or run a single question manually.
-
-If discovery fails, set the absolute Magpie/Codex executable paths in the plugin's
-settings. Enter an executable path, not a command line. A failed catalog refresh
-shows the reason and permits manual retry; it does not erase history.
+source. A separate installation copy prevents accidentally staging it. Add that
+folder's absolute path in Magpie's **Plugins → Add plugin**, then follow step 2
+above. Disable any other installation of the same plugin first.
 
 ## Architecture
 
@@ -98,6 +118,12 @@ Expected logic answers stay in the local grader, not in model prompts. Drawing
 extraction and a separate bounded screenshot queue do not occupy the model queue.
 SQLite stores monitor configuration, immutable executions, events, and derived
 thumbnail caches. The UI talks to a capability-authenticated loopback API.
+
+The entry point resolves each enabled installation spec to its actual directory
+before starting the service. For Git sources, it uses the host's
+`plugins/package.json` dependency mapping rather than treating `github:` as a
+filesystem path. Disabling/removing a copy or changing its options invalidates
+that copy's activity check; an unrelated enabled copy cannot substitute for it.
 
 ## Behavior and Statistics
 
@@ -200,6 +226,7 @@ identity such as a GitHub noreply email for open-source commits.
 | Symptom | Check |
 | --- | --- |
 | Access/catalog not available | Connect native Codex on Magpie's Agents page; check executable paths and the displayed reason; retry the catalog |
+| GitHub copy stays on the startup page | Update to a revision with GitHub-install activation support, reopen it, and check that another installation is not enabled |
 | Page authorization expired | Reopen the plugin from Magpie rather than reusing an old local URL |
 | Blank or missing thumbnail | Install Chrome/Edge or set its executable path; open the isolated original preview or explicitly retry the screenshot |
 | A long animation is still faint | Thumbnail capture waits a bounded interval, not for arbitrary animation completion |
