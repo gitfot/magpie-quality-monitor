@@ -3,6 +3,7 @@ import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { historyKey } from "./config.ts";
 import { tokenTotal } from "./metrics.ts";
+import { FingerprintStore } from "./fingerprint-store.ts";
 import type {
   Execution,
   MonitorEvent,
@@ -13,7 +14,8 @@ import type {
 
 export class Store {
   private db: Database;
-  constructor(directory: string) {
+  readonly fingerprint: FingerprintStore;
+  constructor(directory: string, recoveredAt = Date.now()) {
     mkdirSync(directory, { recursive: true, mode: 0o700 });
     this.db = new Database(join(directory, "monitor.sqlite"), {
       create: true,
@@ -27,6 +29,7 @@ export class Store {
       CREATE TABLE IF NOT EXISTS events (id TEXT PRIMARY KEY, object_id TEXT, at REAL, value TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS settings (id INTEGER PRIMARY KEY CHECK(id=1), value TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS thumbnails (record_id TEXT PRIMARY KEY, renderer TEXT NOT NULL, png BLOB, metadata TEXT NOT NULL);`);
+    this.fingerprint = new FingerprintStore(this.db, recoveredAt);
     const columns = this.db.query("PRAGMA table_info(records)").all() as {
       name: string;
     }[];
@@ -205,6 +208,9 @@ export class Store {
     ).map((x) => JSON.parse(x.value));
   }
   clean(now: number) {
+    this.fingerprint.clean(
+      now - (this.settings().fingerprintRetentionDays ?? 30) * 86400000,
+    );
     const cutoff = now - this.settings().retentionDays * 86400000;
     this.db.transaction(() => {
       this.db.query("DELETE FROM records WHERE at<?").run(cutoff);

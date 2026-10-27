@@ -15,3 +15,17 @@ distributed in this standalone repository.
 Magpie and Codex are referenced to explain interoperability. Their names do not
 imply sponsorship, affiliation or official support. Third-party dependencies
 retain their own licenses; see the dependency manifests and installed notices.
+
+Fingerprint reference data (not application code) in src/fingerprint-presets/
+is reproduced unchanged from hanlinwenyuan/hlwy-ai-checker, revision
+7bddead107da09ddec459522df4b74eb0c7f8ac6, retrieved 2026-10-27.
+Upstream distributes that snapshot under GNU LGPL version 2.1; its complete
+license is retained at src/fingerprint-presets/LICENSE. The seven original JSON
+files are the preferred source data and are included in plugin distributions.
+src/fingerprint-baselines.json is a generated collection of those entries,
+with source and license metadata added; reference distributions are unchanged.
+Source: https://github.com/hanlinwenyuan/hlwy-ai-checker/tree/7bddead107da09ddec459522df4b74eb0c7f8ac6
+No upstream application, scoring code, or vendor-certification claims are used.
+Data are provided without warranty; provenance and CLI comparability have not
+been independently verified. New application code remains under this project's
+MIT license; the bundled third-party data retains the upstream license.

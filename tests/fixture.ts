@@ -34,6 +34,7 @@ export async function fixture(
       text?: string;
       status?: number;
       finish?: string;
+      tools?: boolean;
     };
     if (res.destroyed) return;
     res.writeHead(r.status ?? 200, { "Content-Type": "application/json" });
@@ -48,6 +49,7 @@ export async function fixture(
                   finish_reason: r.finish ?? "stop",
                 },
               ],
+              tools: r.tools,
             },
       ),
     );
@@ -94,6 +96,7 @@ const response=await fetch(${JSON.stringify(link.baseURL + "/chat/completions")}
 const body=await response.json();const out=e=>console.log(JSON.stringify(e));
 out({type:'thread.started',thread_id:'fixture-independent-thread'});
 if(!response.ok){out({type:'turn.failed',error:{message:'upstream error'}});process.exit(1);}
+if(body.tools)out({type:'item.completed',item:{type:'mcp_tool_call'}});
 out({type:'item.completed',item:{type:'agent_message',text:body.choices[0].message.content}});
 if(body.choices[0].finish_reason!=='length')out({type:'turn.completed',usage:{input_tokens:12,output_tokens:7,cached_input_tokens:2}});
 `,

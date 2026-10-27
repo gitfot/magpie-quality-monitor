@@ -17,6 +17,7 @@ import { Engine } from "./engine.ts";
 import { preview, previewPolicy } from "./content.ts";
 import { HTTPError } from "./types.ts";
 import { Screenshots } from "./screenshots.ts";
+import { fingerprintKey, validateFingerprint } from "./fingerprint.ts";
 
 export interface MonitorOptions {
   directory: string;
@@ -119,7 +120,15 @@ export async function startMonitor(options: MonitorOptions) {
         return;
       }
       if (
-        ["/app.js", "/i18n.js", "/style.css"].includes(path) &&
+        [
+          "/app.js",
+          "/components.js",
+          "/i18n.js",
+          "/style.css",
+          "/fingerprint.js",
+          "/fingerprint.css",
+          "/fingerprint-i18n.js",
+        ].includes(path) &&
         req.method === "GET"
       ) {
         res.setHeader(
@@ -143,7 +152,22 @@ export async function startMonitor(options: MonitorOptions) {
         return;
       }
       if (path === "/api/state" && req.method === "GET") {
+        const day = new Date(now());
+        day.setHours(0, 0, 0, 0);
         json(res, {
+          fingerprints: store.fingerprint.objects().map((o) => ({
+            ...o,
+            rows: o.rows.map((r) => ({
+              ...r,
+              historyKey: fingerprintKey(o, r),
+            })),
+          })),
+          fingerprintBatches: store.fingerprint.summaries(),
+          fingerprintProgress: engine.fingerprintProgress,
+          fingerprintCalls: store.fingerprint.callsSince(day.getTime()),
+          baselines: store.fingerprint
+            .baselines()
+            .map(({ distribution, ...b }) => b),
           objects: store.objects().map((object) => ({
             ...object,
             tests: object.tests.map((test) => ({
@@ -170,15 +194,148 @@ export async function startMonitor(options: MonitorOptions) {
         return;
       }
       if (path === "/api/objects" && req.method === "POST") {
-        const object = validate(await body(req));
+        const input = await body(req);
+        if (input?.type === "fingerprint") {
+          const object = validateFingerprint(input);
+          access.assertConnected();
+          for (const row of object.rows) {
+            access.assertSelectable(row.target);
+            if (
+              !store.fingerprint.baseline(row.baselineId) ||
+              store.fingerprint.baseline(row.baselineId)!.archived
+            )
+              throw new HTTPError(400, "Select an active baseline");
+          }
+          store.fingerprint.save(object);
+          json(res, object, 201);
+          return;
+        }
+        if (input?.type && input.type !== "legacy")
+          throw new HTTPError(400, "Invalid monitor type");
+        const object = validate(input);
         access.assertConnected();
         access.assertSelectable(object.target);
         store.save(object);
         json(res, object, 201);
         return;
       }
-      const objectRoute = path.match(/^\/api\/objects\/([^/]+)(?:\/(run))?$/);
+      const baselineRoute = path.match(/^\/api\/baselines(?:\/([^/]+))?$/);
+      if (baselineRoute) {
+        if (!baselineRoute[1] && req.method === "GET") {
+          json(res, store.fingerprint.baselines());
+          return;
+        }
+        if (!baselineRoute[1] && req.method === "POST") {
+          const input = await body(req),
+            entries = Array.isArray(input) ? input : [input];
+          if (!entries.length || entries.length > 50)
+            throw new HTTPError(400, "Expected 1–50 baselines");
+          // Validate the entire import before writing any entries.
+          const { parseBaseline } = await import("./fingerprint.ts");
+          entries.forEach((entry) => parseBaseline(entry));
+          json(
+            res,
+            entries.map((entry) => store!.fingerprint.import(entry)),
+            201,
+          );
+          return;
+        }
+        if (baselineRoute[1] && req.method === "GET") {
+          const b = store.fingerprint.baseline(baselineRoute[1]);
+          if (!b) throw new HTTPError(404, "Baseline not found");
+          json(res, b);
+          return;
+        }
+        if (baselineRoute[1] && req.method === "PUT") {
+          const v = await body(req);
+          if (typeof v.archived !== "boolean")
+            throw new HTTPError(400, "Expected archive flag");
+          json(res, store.fingerprint.archive(baselineRoute[1], v.archived));
+          return;
+        }
+      }
+      const batchRoute = path.match(
+        /^\/api\/fingerprint-batches\/([^/]+)(?:\/(samples))?$/,
+      );
+      if (batchRoute && req.method === "GET") {
+        const b = store.fingerprint.batch(batchRoute[1]);
+        if (!b) throw new HTTPError(404, "Batch not found or expired");
+        if (batchRoute[2]) {
+          const page = Number(
+            new URL(req.url!, url).searchParams.get("page") ?? 1,
+          );
+          if (!Number.isSafeInteger(page) || page < 1)
+            throw new HTTPError(400, "Invalid page");
+          json(res, store.fingerprint.samplePage(b.id, page));
+        } else json(res, b);
+        return;
+      }
+      const objectRoute = path.match(
+        /^\/api\/objects\/([^/]+)(?:\/(run|stop))?$/,
+      );
       if (objectRoute) {
+        let fingerprint = store.fingerprint.object(objectRoute[1]);
+        if (fingerprint) {
+          if (objectRoute[2] === "run" && req.method === "POST") {
+            const v = await body(req);
+            if (v.rowId !== undefined && typeof v.rowId !== "string")
+              throw new HTTPError(400, "Invalid model row");
+            if (v.rowId && !fingerprint.rows.some((r) => r.id === v.rowId))
+              throw new HTTPError(404, "Model row not found");
+            await engine.enqueue(fingerprint.id, v.rowId);
+            json(res, { queued: true }, 202);
+            return;
+          }
+          if (objectRoute[2] === "stop" && req.method === "POST") {
+            engine.cancel(fingerprint.id, true);
+            json(res, { stopping: true }, 202);
+            return;
+          }
+          if (!objectRoute[2] && req.method === "PUT") {
+            const input = await body(req);
+            fingerprint = store.fingerprint.object(objectRoute[1]);
+            if (!fingerprint) throw new HTTPError(404, "对象不存在");
+            const next = validateFingerprint(input, fingerprint);
+            for (const row of next.rows) {
+              const previous = fingerprint.rows.find((r) => r.id === row.id);
+              if (!previous || previous.target !== row.target)
+                access.assertSelectable(row.target);
+              const baseline = store.fingerprint.baseline(row.baselineId);
+              if (
+                !baseline ||
+                (baseline.archived && previous?.baselineId !== baseline.id)
+              )
+                throw new HTTPError(400, "Select an active baseline");
+            }
+            if (next.enabled && !fingerprint.enabled) {
+              access.assertConnected();
+            }
+            if (
+              next.enabled &&
+              (!fingerprint.enabled ||
+                next.intervalMinutes !== fingerprint.intervalMinutes)
+            )
+              next.nextAt = engine.busy.includes(next.id)
+                ? null
+                : Math.max(
+                    now(),
+                    (next.lastFinishedAt ??
+                      now() - next.intervalMinutes * 60000) +
+                      next.intervalMinutes * 60000,
+                  );
+            if (!next.enabled) next.nextAt = null;
+            store.fingerprint.save(next);
+            json(res, next);
+            return;
+          }
+          if (!objectRoute[2] && req.method === "DELETE") {
+            engine.cancel(fingerprint.id, true);
+            store.fingerprint.remove(fingerprint.id);
+            json(res, { deleted: true });
+            return;
+          }
+          throw new HTTPError(405, "Method not allowed");
+        }
         const old = store.object(objectRoute[1]);
         if (!old) throw new HTTPError(404, "对象不存在");
         if (objectRoute[2] === "run" && req.method === "POST") {
@@ -188,7 +345,10 @@ export async function startMonitor(options: MonitorOptions) {
           return;
         }
         if (req.method === "PUT" && !objectRoute[2]) {
-          const object = validate(await body(req), old);
+          const input = await body(req);
+          if (input?.type === "fingerprint")
+            throw new HTTPError(400, "Monitor type cannot be changed");
+          const object = validate(input, old);
           if (object.target !== old.target)
             access.assertSelectable(object.target);
           if (
@@ -279,6 +439,16 @@ export async function startMonitor(options: MonitorOptions) {
           v.retentionDays > 365
         )
           throw new HTTPError(400, "保留期须为 1–365 天");
+        const fingerprintRetentionDays =
+          v.fingerprintRetentionDays ??
+          store.settings().fingerprintRetentionDays ??
+          30;
+        if (
+          !Number.isInteger(fingerprintRetentionDays) ||
+          fingerprintRetentionDays < 1 ||
+          fingerprintRetentionDays > 365
+        )
+          throw new HTTPError(400, "Fingerprint retention must be 1–365 days");
         const codexPath = v.codexPath ?? store.settings().codexPath ?? "";
         if (
           typeof codexPath !== "string" ||
@@ -314,6 +484,7 @@ export async function startMonitor(options: MonitorOptions) {
           );
         store.setSettings({
           retentionDays: v.retentionDays,
+          fingerprintRetentionDays,
           codexPath,
           magpiePath,
           browserPath,
@@ -330,6 +501,11 @@ export async function startMonitor(options: MonitorOptions) {
           settings: store.settings(),
           records: store.records(),
           events: store.events(),
+          fingerprints: store.fingerprint.objects(),
+          baselines: store.fingerprint.baselines(),
+          fingerprintBatches: store.fingerprint
+            .batches()
+            .map((b) => ({ ...b, samples: store!.fingerprint.samples(b.id) })),
         });
         return;
       }
@@ -434,7 +610,7 @@ export async function startMonitor(options: MonitorOptions) {
       });
     });
     url = `http://127.0.0.1:${(server.address() as { port: number }).port}`;
-    store = new Store(options.directory);
+    store = new Store(options.directory, now());
     access = new CodexAccess(() => store!.settings(), now, options.access);
     screenshots = new Screenshots(store);
     engine = new Engine(store, access, now, options.active, (id) => {

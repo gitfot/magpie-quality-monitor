@@ -12,6 +12,7 @@
   --accent-soft: #eeedfd;
   --accent-fg: #fff;
   --green: #189a58;
+  --timeline-correct: color-mix(in srgb, var(--green) 48%, var(--card));
   --red: #d64545;
   --amber: #b45309;
   --font:
@@ -384,14 +385,16 @@ small,
 .testrow h3 .tag {
   margin-left: 5px;
 }
-.percent {
+.percent,
+.fp-score {
   font-size: 23px;
   font-weight: 500;
   line-height: 1.2;
   font-variant-numeric: tabular-nums;
   color: var(--fg);
 }
-.percent small {
+.percent small,
+.fp-score small {
   font-size: 12px;
   margin-left: 2px;
 }
@@ -402,6 +405,7 @@ small,
   height: var(--timeline-cell);
   gap: 3px;
   margin: 6px 0 3px;
+  overflow: hidden;
 }
 .bars > * {
   flex: 0 0 var(--timeline-cell);
@@ -422,7 +426,7 @@ small,
   box-shadow: none;
 }
 .bars button.state-correct {
-  background: color-mix(in srgb, var(--green) 48%, var(--card));
+  background: var(--timeline-correct);
 }
 .bars button.state-incorrect,
 .bars button.state-error {
@@ -437,6 +441,9 @@ small,
 .bars button:hover:not(:disabled) {
   outline: 1px solid var(--fg-2);
   outline-offset: -1px;
+}
+.bars .timeline-boundary {
+  box-shadow: inset 2px 0 var(--fg-2);
 }
 .axis {
   display: flex;

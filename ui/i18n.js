@@ -2,6 +2,18 @@
 // before entering markup, so user content never becomes a translation key.
 (() => {
   const messages = {
+    暂停监测: [
+      "Pause monitoring",
+      "暫停監測",
+      "監視を一時停止",
+      "Überwachung pausieren",
+    ],
+    "暂停监测后，当前调用完成，不再执行本轮后续题目。": [
+      "Pausing lets the current call finish, then skips the remaining tests in this round.",
+      "暫停監測後，目前呼叫完成，不再執行本輪後續題目。",
+      "一時停止後、現在の呼び出しは完了し、このラウンドの残りのテストは実行しません。",
+      "Beim Pausieren wird der aktuelle Aufruf beendet; die restlichen Tests dieser Runde entfallen.",
+    ],
     "正在启用…": ["Enabling…", "正在啟用…", "有効化中…", "Wird aktiviert…"],
     "正在暂停…": ["Pausing…", "正在暫停…", "一時停止中…", "Wird pausiert…"],
     "正在提交…": ["Submitting…", "正在提交…", "送信中…", "Wird gesendet…"],
@@ -644,6 +656,7 @@
     监测中: ["Monitoring", "監測中", "監視中", "Überwachung aktiv"],
     已暂停: ["Paused", "已暫停", "一時停止中", "Pausiert"],
     全部历史: ["All history", "全部歷史", "すべての履歴", "Gesamter Verlauf"],
+    历史: ["History", "歷史", "履歴", "Verlauf"],
     暂停: ["Pause", "暫停", "一時停止", "Pausieren"],
     启用: ["Enable", "啟用", "有効化", "Aktivieren"],
     编辑: ["Edit", "編輯", "編集", "Bearbeiten"],
@@ -1056,6 +1069,7 @@
       "Monitor wird verbunden…",
     ],
   };
+  Object.assign(messages, globalThis.monitorFingerprintMessages || {});
   let language = "zh-CN",
     index = -1;
   const pattern = new RegExp(

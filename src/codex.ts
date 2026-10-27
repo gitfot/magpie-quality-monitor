@@ -156,6 +156,7 @@ export async function runCodex(input: {
   prompt: string;
   signal: AbortSignal;
   cli: CliInfo;
+  onText?: (text: string) => void;
 }): Promise<{ raw: string; usage: unknown }> {
   const { signal, cli } = input;
   const fail = (kind: CliInfo["errorKind"], message: string): never => {
@@ -292,7 +293,10 @@ export async function runCodex(input: {
       if (event.type === "item.completed") {
         if (event.item?.type === "agent_message") {
           if (typeof event.item.text !== "string") protocolError = true;
-          else raw = event.item.text;
+          else {
+            raw = event.item.text;
+            input.onText?.(raw);
+          }
         } else if (
           [
             "command_execution",
@@ -303,6 +307,16 @@ export async function runCodex(input: {
         )
           cli.toolEvents++;
       }
+      if (
+        (event.type === "item.started" || event.type === "item.updated") &&
+        [
+          "command_execution",
+          "mcp_tool_call",
+          "web_search",
+          "file_change",
+        ].includes(event.item?.type)
+      )
+        cli.toolEvents++;
       if (event.type === "turn.completed") {
         completed = true;
         if (event.usage && typeof event.usage === "object") {

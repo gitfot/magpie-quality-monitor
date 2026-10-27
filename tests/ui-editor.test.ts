@@ -240,6 +240,8 @@ for (const mode of ["new", "edit"]) {
           exact: true,
         })
         .click();
+      if (mode === "new")
+        await b.ui.locator('[data-action="fp-new-legacy"]').click();
       await started;
       // The request stays held until after the form is visible and editable.
       await b.ui.locator("#objectform").waitFor();
@@ -323,6 +325,7 @@ test("an empty cached catalog does not delay opening and options arrive without 
     await b.ui
       .getByRole("button", { name: "＋ 新建监测对象", exact: true })
       .click();
+    await b.ui.locator('[data-action="fp-new-legacy"]').click();
     await started;
     await b.ui.locator("#objectform").waitFor();
     await b.ui.locator('[name="objectName"]').fill("Cold draft");
@@ -472,6 +475,7 @@ test("closing and reopening an editor shares the pending refresh without revivin
     await b.ui
       .getByRole("button", { name: "＋ 新建监测对象", exact: true })
       .click();
+    await b.ui.locator('[data-action="fp-new-legacy"]').click();
     await b.ui.locator('[name="objectName"]').fill("New editor draft");
     release();
     await b.ui.locator('.picker[aria-busy="false"]').waitFor();
@@ -494,6 +498,7 @@ test("the single catalog dropdown is keyboard accessible, translated and contain
     await b.ui
       .getByRole("button", { name: "＋ 新建监测对象", exact: true })
       .click();
+    await b.ui.locator('[data-action="fp-new-legacy"]').click();
     await b.ui.locator('.picker[aria-busy="false"]').waitFor();
     expect(await b.ui.locator('[name="target"]:visible').count()).toBe(0);
     expect(await b.ui.locator("select").count()).toBe(0);

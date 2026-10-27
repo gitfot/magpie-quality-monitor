@@ -1,0 +1,2 @@
+# Keep upstream reference JSON byte-for-byte with its published source.
+src/fingerprint-presets/

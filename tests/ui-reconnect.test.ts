@@ -115,6 +115,7 @@ test("transient failures recover in place and unsaved forms prevent automatic na
     await poll(b);
     await connected(b);
     await b.ui.locator('[data-action="edit"]').click();
+    await b.ui.locator('[data-action="fp-new-legacy"]').click();
     await b.ui.locator('[name="objectName"]').fill("Unsaved monitor");
     await restart(b);
     await poll(b);

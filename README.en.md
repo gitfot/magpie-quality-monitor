@@ -136,6 +136,43 @@ source. A separate installation copy prevents accidentally staging it. Add that
 folder's absolute path in Magpie's **Plugins → Add plugin**, then follow step 2
 above. Disable any other installation of the same plugin first.
 
+## Fingerprint Consistency (Experimental)
+
+Choose **Fingerprint consistency** when creating a monitor. One compact card
+contains multiple model/route rows, each with its own requested reasoning effort,
+pinned reference, latest result and batch timeline. There is no card-level score.
+
+- The shared reference library includes seven fixed upstream API datasets and
+  accepts hlwy-ai-checker JSON exports (objects or arrays). Source, collection
+  time and sample size are visible, not vendor attestations. Imports never
+  silently replace bindings; archiving preserves existing references.
+- Each model defaults to **50 independent CLI attempts per batch**. Failures,
+  tool events and invalid formats consume the budget without retries. A valid
+  sample is a successful tool-free CLI turn containing only an integer in 1–355.
+- Scoring requires the full attempt budget, at least 40 valid samples and at
+  least 80% validity. The score is `100 * (1 - sqrt(JSD_base2))`, over the full
+  distribution. Call success, sample validity and distribution match are distinct.
+- Each real timeline cell represents one batch. Open it for paired frequency
+  bars, statistics, individual outputs and frozen configuration. Unscored,
+  interrupted and absent history are not painted as zero scores. Fingerprint and
+  logic cards share the same responsive timeline and action components. The
+  overview shows the latest N retained batches; time/configuration filters live
+  in History and do not change the overview's latest result.
+- New cards have scheduling off; enabling defaults to 24 hours after the previous
+  round ends, without catch-up or overlap. Disabling scheduling does not stop the
+  current round. Stopping affects only this card and cannot guarantee the provider
+  stops work or billing. Each sample yields to the shared serial CLI queue.
+- Fingerprint batches and their samples are retained together for **30 days** by
+  default, independently of existing records. References are retained separately.
+  Today's CLI executions count individual sampling attempts, not batches or probes.
+
+This is an **experimental distribution comparison**, not proof of model identity,
+mixture ratio or capability. API reference/CLI comparability, natural variation
+and real costs have not been empirically validated. Real paid sampling requires
+separate authorization of targets, batches and budget. Automated tests use a
+simulated CLI and temporary data only. See `NOTICE` and
+`src/fingerprint-presets/LICENSE` for the bundled reference data's LGPL notice.
+
 ## Behavior and Statistics
 
 | Setting | Default |
@@ -231,6 +268,10 @@ npm.cmd test -- --timeout 60000
 npm.cmd run check:privacy:selftest
 npm.cmd run check:privacy
 ```
+
+`npm.cmd run test:fingerprint` runs the fingerprint API and embedded UI suite.
+The mock preview includes the compact fingerprint card and first prepares 50
+simulated CLI attempts to populate genuine service records, without paid calls.
 
 Use `npm.cmd run preview` for a clearly marked local mock preview. It does not
 connect to the daily installation or paid providers. The preview URL includes

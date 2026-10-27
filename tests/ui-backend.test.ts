@@ -8,6 +8,7 @@ test("CLI is the only backend, models are catalog-only and unknown native access
     await b.ui
       .getByRole("button", { name: "＋ 新建监测对象", exact: true })
       .click();
+    await b.ui.locator('[data-action="fp-new-legacy"]').click();
     expect(await b.ui.locator('[name="backend"]').inputValue()).toBe(
       "codex-cli",
     );
@@ -26,7 +27,7 @@ test("CLI is the only backend, models are catalog-only and unknown native access
     await b.ui.locator("#overlay.open").waitFor({ state: "hidden" });
     writeFileSync(b.f.connectionFile, "{}");
     await b.page.reload();
-    await b.ui.getByRole("button", { name: "全部历史", exact: true }).click();
+    await b.ui.getByRole("button", { name: "历史", exact: true }).click();
     expect(await b.ui.locator("#dialog").innerText()).toContain("暂无记录");
     expect(await b.ui.locator("h1").innerText()).toBe("Codex降智检测");
   } finally {

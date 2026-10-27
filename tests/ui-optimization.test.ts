@@ -96,7 +96,7 @@ test("toggle feedback is immediate, survives rendering and recovers from failure
       expect(requests).toBe(1);
       release();
       await b.ui.locator('[data-action="toggle"]:enabled').waitFor();
-      expect(await toggle.innerText()).toBe("暂停");
+      expect(await toggle.innerText()).toBe("暂停监测");
       expect((await b.f.api("state")).data.objects[0].enabled).toBe(true);
       if (failing)
         expect(await b.ui.locator("#toast").innerText()).toBe(
@@ -186,7 +186,7 @@ test("a mutation queues a fresh state read after an older poll instead of waitin
     release();
     await b.ui.locator('[data-action="toggle"]:enabled').waitFor();
     expect(await b.ui.locator('[data-action="toggle"]').innerText()).toBe(
-      "暂停",
+      "暂停监测",
     );
     expect(await b.ui.locator('.cardhead [role="status"]').innerText()).toBe(
       "监测中",
@@ -222,7 +222,7 @@ test("pending and failed catalog refreshes do not block existing objects or eras
     await b.ui.locator('[data-action="toggle"]').click();
     await b.ui.locator('[data-action="toggle"]:enabled').waitFor();
     expect(await b.ui.locator('[data-action="toggle"]').innerText()).toBe(
-      "暂停",
+      "暂停监测",
     );
     release();
     await b.ui

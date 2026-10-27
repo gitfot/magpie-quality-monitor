@@ -21,28 +21,8 @@
     modalContext = null,
     rendered = "";
   const pendingActions = new Map();
+  let fingerprint;
   const $ = (s) => document.querySelector(s);
-  const timelineSlots = new Map();
-  const timelineTargets = new Map();
-  const timelineObserver = new ResizeObserver((entries) => {
-    let changed = false;
-    for (const { target, contentRect } of entries) {
-      if (!target.isConnected) continue;
-      const style = getComputedStyle(target),
-        size = parseFloat(style.getPropertyValue("--timeline-cell")),
-        gap = parseFloat(style.columnGap),
-        slots = Math.max(
-          0,
-          Math.floor((contentRect.width + gap) / (size + gap)),
-        ),
-        key = target.dataset.timeline;
-      if (timelineSlots.get(key) !== slots) {
-        timelineSlots.set(key, slots);
-        changed = true;
-      }
-    }
-    if (changed) render();
-  });
   const backend = (o) => o.backend || "direct-gateway";
   const backendName = (o) =>
     backend(o) === "codex-cli" ? "Codex CLI" : "原直连网关（历史）";
@@ -84,22 +64,26 @@
   );
   const button = (text, action, attrs = "", className = "") =>
     `<button type="button" class="${className}" data-action="${action}" ${t(attrs)}>${t(text)}</button>`;
-  function runButton(object, test, className) {
+  const components = globalThis.createMonitorComponents({
+    button,
+    escape,
+    time,
+    t,
+    render,
+  });
+  function runButton(object, test) {
     const pending = pendingActions.get(object.id),
       submitting =
         pending?.action === "run" && pending.testId === (test?.id || "");
-    return button(
-      submitting
-        ? "正在提交…"
-        : test
-          ? test.kind === "logic"
-            ? "▷ 单题运行"
-            : "▷ 运行"
-          : "▷ 执行一轮",
-      "run",
-      `data-id="${object.id}" ${test ? `data-test="${test.id}"` : ""} aria-busy="${submitting}" ${pending || state.busy.includes(object.id) || objectReason(object) ? "disabled" : ""}`,
-      className,
-    );
+    return components.runButton({
+      action: "run",
+      attrs: `data-id="${object.id}" ${test ? `data-test="${test.id}"` : ""}`,
+      single: Boolean(test),
+      submitting,
+      disabled: Boolean(
+        pending || state.busy.includes(object.id) || objectReason(object),
+      ),
+    });
   }
   async function api(route, method = "GET", body) {
     const response = await fetch("/api/" + route, {
@@ -221,37 +205,21 @@
     const formats = rows.filter((r) => r.verdict === "format").length,
       truncated = rows.filter((r) => r.verdict === "truncated").length;
     // Width limits the visible executions, never the statistics above.
-    const key = object.id + "/" + test.id,
-      slots = timelineSlots.get(key) ?? 0,
-      visible = rows.slice(0, slots);
-    const countText = t("展示最近 {shown} 条 / 共 {total} 条")
-      .replace("{shown}", visible.length)
-      .replace("{total}", rows.length);
-    return `<div class="logicitem"><div class="flex between"><h3>${escape(test.name)} <span class="tag">逻辑题</span>${test.enabled ? "" : " <small>已停用</small>"}</h3>${runButton(object, test, "plain small")}</div><div class="flex logicstats"><span class="percent">${pct}<small>%</small></span><small>答案正确 ${correct}/${graded.length} · 调用成功 ${success.length}/${rows.length}${!currentOnly && rows.some((r) => r.historyKey !== test.historyKey) ? " · 跨配置统计" : ""}${formats ? ` · 格式异常 ${formats}` : ""}${truncated ? ` · 截断 ${truncated}` : ""}</small></div><div class="timeline"><div class="bars" data-timeline="${escape(key)}">${Array.from(
-      { length: slots - visible.length },
-      () =>
-        `<span class="timeline-empty" title="${escape(t("暂无执行记录"))}" aria-hidden="true"></span>`,
-    ).join("")}${visible
-      .toReversed()
-      .map((r) => {
+    const timeline = components.timeline({
+      key: object.id + "/" + test.id,
+      records: rows,
+      label: test.name,
+      cell: (r) => {
         const status = r.call === "success" ? r.verdict : r.call;
-        const description = `${time(r.at)} · ${label[r.call]}${r.verdict ? " · " + label[r.verdict] : ""} · v${r.version}`;
-        return button(
-          "",
-          "detail",
-          `data-id="${r.id}" title="${escape(description)}" aria-label="${escape(description)}"`,
-          "state-" + status,
-        );
-      })
-      .join("")}</div></div><div class="revision-markers">${visible
-      .filter(
-        (r, i) =>
-          i < visible.length - 1 && r.historyKey !== visible[i + 1].historyKey,
-      )
-      .map((r) => `<small>配置变更 ${time(r.at)} · v${r.version} </small>`)
-      .join(
-        "",
-      )}</div><div class="axis"><span>${escape(countText)}</span><span>${rows.length ? "最新 " + time(rows[0].at) : "所选范围暂无记录"}</span></div></div>`;
+        return {
+          action: "detail",
+          attrs: `data-id="${r.id}"`,
+          className: "state-" + status,
+          title: `${time(r.at)} · ${label[r.call]}${r.verdict ? " · " + label[r.verdict] : ""} · v${r.version}`,
+        };
+      },
+    });
+    return `<div class="logicitem"><div class="flex between"><h3>${escape(test.name)} <span class="tag">逻辑题</span>${test.enabled ? "" : " <small>已停用</small>"}</h3>${runButton(object, test)}</div><div class="flex logicstats"><span class="percent">${pct}<small>%</small></span><small>答案正确 ${correct}/${graded.length} · 调用成功 ${success.length}/${rows.length}${!currentOnly && rows.some((r) => r.historyKey !== test.historyKey) ? " · 跨配置统计" : ""}${formats ? ` · 格式异常 ${formats}` : ""}${truncated ? ` · 截断 ${truncated}` : ""}</small></div>${timeline}</div>`;
   }
   function drawing(object, test) {
     const rows = state.records.filter(
@@ -259,7 +227,7 @@
       ),
       latest = rows.find((r) => r.hasArtifact),
       last = rows[0];
-    return `<div class="testrow"><div class="flex between artheading"><h3>${escape(test.name)} <span class="tag">绘图</span></h3>${runButton(object, test, "plain small")}</div>${latest ? `<div class="artstage" data-artifact="${latest.id}" data-preview="${latest.id}">${button("放大 ↗", "detail", `data-id="${latest.id}"`, "small")}</div>` : '<div class="empty art-empty">尚无完整作品</div>'}<div class="flex between artcaption"><div class="artmetrics"><small>创建于 ${time(latest?.finishedAt ?? latest?.at)}</small><br><small>耗时 ${latest && Number.isFinite(latest.finishedAt - latest.at) && latest.finishedAt >= latest.at ? ((latest.finishedAt - latest.at) / 60000).toFixed(2) : "—"} 分钟 · Token ${latest?.tokenTotal != null ? (latest.tokenTotal / 1000).toFixed(2) + "k" : "—"}</small>${latest && latest.historyKey !== test.historyKey ? '<br><small class="old-config">来自旧配置</small>' : ""}</div>${button("历史图片 ↗", "gallery", `data-test="${test.id}" data-name="${escape(test.name)}"`, "small")}</div>${last && !last.hasArtifact ? `<div class="warning">${time(last.at)} · ${escape(label[last.verdict] || label[last.call] || "未提取到完整作品")}；${latest ? "当前展示旧作品" : "尚无作品"} ${button("详情", "detail", `data-id="${last.id}"`, "plain small")}</div>` : ""}</div>`;
+    return `<div class="testrow"><div class="flex between artheading"><h3>${escape(test.name)} <span class="tag">绘图</span></h3>${runButton(object, test)}</div>${latest ? `<div class="artstage" data-artifact="${latest.id}" data-preview="${latest.id}">${button("放大 ↗", "detail", `data-id="${latest.id}"`, "small")}</div>` : '<div class="empty art-empty">尚无完整作品</div>'}<div class="flex between artcaption"><div class="artmetrics"><small>创建于 ${time(latest?.finishedAt ?? latest?.at)}</small><br><small>耗时 ${latest && Number.isFinite(latest.finishedAt - latest.at) && latest.finishedAt >= latest.at ? ((latest.finishedAt - latest.at) / 60000).toFixed(2) : "—"} 分钟 · Token ${latest?.tokenTotal != null ? (latest.tokenTotal / 1000).toFixed(2) + "k" : "—"}</small>${latest && latest.historyKey !== test.historyKey ? '<br><small class="old-config">来自旧配置</small>' : ""}</div>${button("历史图片 ↗", "gallery", `data-test="${test.id}" data-name="${escape(test.name)}"`, "small")}</div>${last && !last.hasArtifact ? `<div class="warning">${time(last.at)} · ${escape(label[last.verdict] || label[last.call] || "未提取到完整作品")}；${latest ? "当前展示旧作品" : "尚无作品"} ${button("详情", "detail", `data-id="${last.id}"`, "plain small")}</div>` : ""}</div>`;
   }
   function objectReason(object) {
     if (object.needsConversion || backend(object) !== "codex-cli")
@@ -269,8 +237,7 @@
   }
   function objectStatus(object) {
     const pending = pendingActions.get(object.id);
-    if (pending)
-      return `<span class="status" role="status" aria-live="polite">${escape(t(pending.text))}</span>`;
+    if (pending) return components.status("pending", pending.text, true);
     const kind =
       state.running === object.id
         ? "running"
@@ -291,7 +258,28 @@
                 ? "等待接入"
                 : "监测中"
               : "已暂停";
-    return `<span class="status status-${kind}" role="status">${text}</span>`;
+    return components.status(kind, text);
+  }
+  function objectActions(object) {
+    const pending = pendingActions.get(object.id);
+    return components.cardActions({
+      id: object.id,
+      status: objectStatus(object),
+      pending: Boolean(pending),
+      toggle: {
+        action: "toggle",
+        text:
+          pending?.action === "toggle"
+            ? pending.text
+            : object.enabled
+              ? "暂停监测"
+              : "启用",
+        busy: pending?.action === "toggle",
+        disabled: object.needsConversion,
+        title: "暂停监测后，当前调用完成，不再执行本轮后续题目。",
+      },
+      execution: runButton(object, null),
+    });
   }
   // Keep unchanged iframe browsing contexts (and keyboard focus) alive across polls.
   function patch(target, source) {
@@ -347,15 +335,18 @@
     today.setHours(0, 0, 0, 0);
     const day = state.records.filter((r) => r.at >= today.getTime()),
       successful = day.filter((r) => r.call === "success").length,
-      rates = `${day.length ? Math.round((successful / day.length) * 1000) / 10 + "%" : "—"}<small> · ${successful}/${day.length}</small>`;
+      calls = day.length + (state.fingerprintCalls?.attempted || 0),
+      successes = successful + (state.fingerprintCalls?.success || 0),
+      rates = `${calls ? Math.round((successes / calls) * 1000) / 10 + "%" : "—"}<small> · ${successes}/${calls}</small>`,
+      allObjects = [...state.objects, ...state.fingerprints];
     const template = document.createElement("template");
     template.innerHTML = t(
-      `<div class="page-head flex between"><div><h1>Codex降智检测</h1></div><div class="flex header-actions">${button("刷新 Codex 目录", "refresh-catalog")}${button("设置", "settings")}${button("＋ 新建监测对象", "edit", "", "primary")}</div></div><div class="connection catalog-feedback" role="status" aria-live="polite" hidden></div>${state.error ? `<div class="warning">${escape(state.error)}</div>` : ""}<div class="metricrow"><div class="metric"><div class="label">已启用对象</div><div class="value">${state.objects.filter((o) => o.enabled).length}<small> / ${state.objects.length}</small></div></div><div class="metric"><div class="label">今日请求</div><div class="value">${day.length}<small> 次</small></div></div><div class="metric"><div class="label">调用成功率</div><div class="value">${rates}</div></div><div class="metric"><div class="label">当前执行</div><div class="value">${state.running ? 1 : 0}<small> 个对象${state.queued.length ? ` · 排队中 ${state.queued.length}` : ""}</small></div></div></div><div class="toolbar"><div class="flex"><strong>监测对象</strong><span class="tag">${state.objects.length}</span><small class="catalog-connection-label">${state.connection.connected ? "原生 Codex 已接入" : "等待接入"}</small><small>列表更新于 ${time(state.connection.updatedAt)}</small></div><div class="seg">${button(currentOnly ? "仅当前配置" : "全部配置", "scope")}${button("最近 24 小时", "period", 'data-hours="24"', period === 24 ? "selected" : "")}${button("最近 7 天", "period", 'data-hours="168"', period === 168 ? "selected" : "")}</div></div>${
-        state.objects.length
+      `<div class="page-head flex between"><div><h1>Codex降智检测</h1></div><div class="flex header-actions">${button("刷新 Codex 目录", "refresh-catalog")}${button("参考基准库", "fp-library")}${button("设置", "settings")}${button("＋ 新建监测对象", "edit", "", "primary")}</div></div><div class="connection catalog-feedback" role="status" aria-live="polite" hidden></div>${state.error ? `<div class="warning">${escape(state.error)}</div>` : ""}<div class="metricrow"><div class="metric"><div class="label">已启用对象</div><div class="value">${allObjects.filter((o) => o.enabled).length}<small> / ${allObjects.length}</small></div></div><div class="metric"><div class="label">今日 CLI 执行</div><div class="value">${calls}<small> 次</small></div></div><div class="metric"><div class="label">调用成功率</div><div class="value">${rates}</div></div><div class="metric"><div class="label">当前执行</div><div class="value">${state.running ? 1 : 0}<small> 个对象${state.queued.length ? ` · 排队中 ${state.queued.length}` : ""}</small></div></div></div><div class="toolbar"><div class="flex"><strong>监测对象</strong><span class="tag">${allObjects.length}</span><small class="catalog-connection-label">${state.connection.connected ? "原生 Codex 已接入" : "等待接入"}</small><small>列表更新于 ${time(state.connection.updatedAt)}</small></div><div class="seg fp-legacy-filters" ${fingerprint.showLegacy() ? "" : "hidden"}>${state.fingerprints.length ? "<small>逻辑与绘图</small>" : ""}${button(currentOnly ? "仅当前配置" : "全部配置", "scope")}${button("最近 24 小时", "period", 'data-hours="24"', period === 24 ? "selected" : "")}${button("最近 7 天", "period", 'data-hours="168"', period === 168 ? "selected" : "")}</div></div>${fingerprint.notice()}${fingerprint.toolbar()}${
+        state.objects.length && fingerprint.showLegacy()
           ? state.objects
               .map(
                 (o) =>
-                  `<section class="card"><div class="cardhead flex between"><div><h2>${escape(o.name)}</h2><small class="mono">${escape(o.target)} <span class="tag">${escape(o.effort || "默认")}</span> <span class="tag">${escape(t(backendName(o)))}</span></small></div><div class="flex">${objectStatus(o)}${button("全部历史", "history", `data-id="${o.id}"`, "small")}${button(pendingActions.get(o.id)?.action === "toggle" ? pendingActions.get(o.id).text : o.enabled ? "暂停" : "启用", "toggle", `data-id="${o.id}" aria-busy="${pendingActions.get(o.id)?.action === "toggle"}" ${o.needsConversion || pendingActions.has(o.id) ? "disabled" : ""}`, "small")}${button("编辑", "edit", `data-id="${o.id}" ${pendingActions.has(o.id) ? "disabled" : ""}`, "small")}${runButton(o, null, "primary small")}</div></div><div class="cardbody">${objectReason(o) ? `<p class="note">${escape(t(objectReason(o)))}</p>` : ""}<div class="flex between muted"><small>每 ${o.intervalMinutes} 分钟 · ${o.tests.filter((t) => t.enabled).length} 个启用测试项 · 预计 ${Math.round((1440 / o.intervalMinutes) * o.tests.filter((t) => t.enabled).length)} 次/天</small><small>下次 ${time(o.nextAt)}</small></div><div class="object-layout ${o.tests.some((t) => t.kind === "logic") && o.tests.some((t) => t.kind === "drawing") ? "" : "single-column"}">${
+                  `<section class="card"><div class="cardhead flex between"><div><h2>${escape(o.name)}</h2><small class="mono"><span class="tag">逻辑与绘图</span> ${escape(o.target)} <span class="tag">${escape(o.effort || "默认")}</span> <span class="tag">${escape(t(backendName(o)))}</span></small></div>${objectActions(o)}</div><div class="cardbody">${objectReason(o) ? `<p class="note">${escape(t(objectReason(o)))}</p>` : ""}<div class="flex between muted"><small>每 ${o.intervalMinutes} 分钟 · ${o.tests.filter((t) => t.enabled).length} 个启用测试项 · 预计 ${Math.round((1440 / o.intervalMinutes) * o.tests.filter((t) => t.enabled).length)} 次/天</small><small>下次 ${time(o.nextAt)}</small></div><div class="object-layout ${o.tests.some((t) => t.kind === "logic") && o.tests.some((t) => t.kind === "drawing") ? "" : "single-column"}">${
                     o.tests.some((t) => t.kind === "logic")
                       ? `<div>${o.tests
                           .filter((t) => t.kind === "logic")
@@ -372,29 +363,17 @@
                   }</div></div></section>`,
               )
               .join("")
-          : '<div class="empty"><h2>从一组固定题目开始</h2><p>新建监测对象，选择模型或路由，然后添加逻辑题与绘图题。</p><p>新建默认暂停，不会自动消耗额度。</p></div>'
-      }<div class="legend"><span>● 正确</span><span>× 错误</span><span>△ 调用异常 / 格式 / 截断</span></div>`,
+          : allObjects.length
+            ? ""
+            : '<div class="empty"><h2>从一组固定题目开始</h2><p>新建监测对象，选择模型或路由，然后添加逻辑题与绘图题。</p><p>新建默认暂停，不会自动消耗额度。</p></div>'
+      }${fingerprint.cards()}${fingerprint.showLegacy() ? '<div class="legend"><span>● 正确</span><span>× 错误</span><span>△ 调用异常 / 格式 / 截断</span></div>' : ""}`,
     );
     const source = document.createElement("main");
     source.className = "canvas";
     source.id = "app";
     source.append(template.content);
     patch($("#app"), source);
-    for (const [line, key] of timelineTargets)
-      if (!line.isConnected || line.dataset.timeline !== key) {
-        timelineObserver.unobserve(line);
-        timelineTargets.delete(line);
-      }
-    const activeTimelines = new Set();
-    for (const line of $("#app").querySelectorAll(".bars[data-timeline]")) {
-      activeTimelines.add(line.dataset.timeline);
-      if (!timelineTargets.has(line)) {
-        timelineTargets.set(line, line.dataset.timeline);
-        timelineObserver.observe(line);
-      }
-    }
-    for (const key of timelineSlots.keys())
-      if (!activeTimelines.has(key)) timelineSlots.delete(key);
+    components.bind($("#app"));
     rendered = signature();
     updateCatalogFeedback();
     void fillPreviews($("#app"));
@@ -547,6 +526,7 @@
   }
   function updateCatalogFeedback() {
     if (!state) return;
+    fingerprint?.updateCatalog();
     const busy = Boolean(catalogRequest),
       control = $('[data-action="refresh-catalog"]'),
       feedback = $(".catalog-feedback"),
@@ -681,7 +661,7 @@
     modal(
       "监测设置",
       "本地存储与接入",
-      `<div class="detailblock"><h3>${state.connection.connected ? "● 已连接" : "○ 未连接"}</h3><p>${escape(t(state.connection.reason))}</p><small>仅检查本地 Codex 的 Magpie 接入声明，不交叉验证网关地址。目录仅用于选择模型；读取失败或目标已移除不阻止执行，实际调用失败会留记录。</small></div><form id="settingsform" style="margin-top:20px">${field("完整记录保留天数（1–365）", "retentionDays", state.settings.retentionDays, "number")}${field("Magpie CLI 绝对路径（留空自动发现）", "magpiePath", state.settings.magpiePath || "")}${field("Codex CLI 绝对路径（留空自动发现）", "codexPath", state.settings.codexPath || "")}${field("截图浏览器绝对路径（留空查找 Chrome/Edge）", "browserPath", state.settings.browserPath || "")}<p class="note">截图在无头浏览器后台执行，不打开窗口、不读取登录状态、不自动下载浏览器。</p><p class="note">路径仅指定可执行文件，不含参数；插件不修改 Codex 配置，也不回退直连。</p><p class="warning">保存较短保留期会清理到期的完整记录与作品，可先导出 JSON 留档。</p><p class="note">全局串行 · 不自动重试。空档不计模型失败 · 不评价绘图质量。固定题目不用于断言整体能力或供应商换模。</p><p class="note">异常仅在插件内提示，不发送邮件、Webhook 或桌面通知。</p><p class="modalerror" id="formerror"></p><div class="buttonrow">${button("导出历史 JSON", "export")}${button("保存设置", "save-settings", "", "primary")}</div></form>`,
+      `<div class="detailblock"><h3>${state.connection.connected ? "● 已连接" : "○ 未连接"}</h3><p>${escape(t(state.connection.reason))}</p><small>仅检查本地 Codex 的 Magpie 接入声明，不交叉验证网关地址。目录仅用于选择模型；读取失败或目标已移除不阻止执行，实际调用失败会留记录。</small></div><form id="settingsform" style="margin-top:20px">${field("完整记录保留天数（1–365）", "retentionDays", state.settings.retentionDays, "number")}${field("指纹批次保留天数（1–365）", "fingerprintRetentionDays", state.settings.fingerprintRetentionDays || 30, "number")}${field("Magpie CLI 绝对路径（留空自动发现）", "magpiePath", state.settings.magpiePath || "")}${field("Codex CLI 绝对路径（留空自动发现）", "codexPath", state.settings.codexPath || "")}${field("截图浏览器绝对路径（留空查找 Chrome/Edge）", "browserPath", state.settings.browserPath || "")}<p class="note">截图在无头浏览器后台执行，不打开窗口、不读取登录状态、不自动下载浏览器。</p><p class="note">路径仅指定可执行文件，不含参数；插件不修改 Codex 配置，也不回退直连。</p><p class="warning">保存较短保留期会清理到期的完整记录与作品，可先导出 JSON 留档。</p><p class="note">全局串行 · 不自动重试。空档不计模型失败 · 不评价绘图质量。固定题目不用于断言整体能力或供应商换模。</p><p class="note">异常仅在插件内提示，不发送邮件、Webhook 或桌面通知。</p><p class="modalerror" id="formerror"></p><div class="buttonrow">${button("导出历史 JSON", "export")}${button("保存设置", "save-settings", "", "primary")}</div></form>`,
     );
   }
   async function saveForm(id, button) {
@@ -693,6 +673,9 @@
       ? structuredClone(editing)
       : {
           retentionDays: Number(form.elements.retentionDays.value),
+          fingerprintRetentionDays: Number(
+            form.elements.fingerprintRetentionDays.value,
+          ),
           codexPath: form.elements.codexPath.value,
           magpiePath: form.elements.magpiePath.value,
           browserPath: form.elements.browserPath.value,
@@ -763,6 +746,29 @@
       render();
     }
   }
+  fingerprint = globalThis.createFingerprintUI({
+    components,
+    api,
+    modal,
+    close,
+    notify,
+    refresh,
+    escape,
+    button,
+    time,
+    t,
+    state: () => state,
+    render,
+    editLegacy: () => {
+      edit();
+      void refreshCatalog();
+    },
+    refreshCatalog,
+    catalog: () => ({
+      busy: Boolean(catalogRequest),
+      error: catalogError || state?.connection.catalogError,
+    }),
+  });
   const actions = {
     close,
     settings,
@@ -780,9 +786,14 @@
     },
     "refresh-catalog": refreshCatalog,
     edit: (b) => {
+      if (!b.dataset.id) {
+        fingerprint.choose();
+        return;
+      }
       edit(b.dataset.id);
       void refreshCatalog();
     },
+    ...fingerprint.actions,
     toggle: objectAction,
     run: objectAction,
     detail: (b) => detail(b.dataset.id),
@@ -905,7 +916,7 @@
     if (e.key === "Tab" && $("#overlay").classList.contains("open")) {
       const list = [
           ...$("#dialog").querySelectorAll(
-            "button:not([disabled]),input,textarea,summary",
+            "button:not([disabled]),input,textarea,select:not([disabled]),summary",
           ),
         ].filter((x) => x.getClientRects().length),
         first = list[0],
@@ -988,6 +999,8 @@
       if (modalContext === "editor") {
         collect();
         edit(null, true);
+      } else if (fingerprint.languageChanged()) {
+        // Preserve the new editor's draft across host language changes too.
       } else if ($("#overlay").classList.contains("open")) close();
       render();
     }

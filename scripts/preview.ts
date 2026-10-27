@@ -3,11 +3,13 @@ import { fixture } from "../tests/fixture.ts";
 import { writeFileSync, mkdirSync } from "node:fs";
 import http from "node:http";
 const f = await fixture((body) => ({
-  text: String(body.messages[0].content).includes("Draw")
-    ? '<!doctype html><html><body style="margin:0;background:#e6ebd9"><svg viewBox="0 0 600 360" xmlns="http://www.w3.org/2000/svg"><circle cx="460" cy="95" r="45" fill="#d9955f"/><path d="M0 270L165 90 340 270 460 150 600 280V360H0" fill="#9db2a0"/><path d="M0 320L190 200 380 310 500 245 600 330V360H0" fill="#547b6b"/><path d="M0 300Q270 350 600 290" stroke="#ececd9" stroke-width="12" fill="none"/><rect x="240" y="275" width="150" height="40" rx="7" fill="#d9955f"/><rect x="255" y="282" width="110" height="14" fill="#eeeeda"/><text x="24" y="38" fill="#527565" font-size="18">THE SLOW JOURNEY</text></svg></body></html>'
-    : String(body.messages[0].content).includes("Bridge")
-      ? "FINAL_ANSWER: 20"
-      : "Reasoning completed.\nFINAL_ANSWER: 21",
+  text: String(body.messages[0].content).includes("355")
+    ? "37"
+    : String(body.messages[0].content).includes("Draw")
+      ? '<!doctype html><html><body style="margin:0;background:#e6ebd9"><svg viewBox="0 0 600 360" xmlns="http://www.w3.org/2000/svg"><circle cx="460" cy="95" r="45" fill="#d9955f"/><path d="M0 270L165 90 340 270 460 150 600 280V360H0" fill="#9db2a0"/><path d="M0 320L190 200 380 310 500 245 600 330V360H0" fill="#547b6b"/><path d="M0 300Q270 350 600 290" stroke="#ececd9" stroke-width="12" fill="none"/><rect x="240" y="275" width="150" height="40" rx="7" fill="#d9955f"/><rect x="255" y="282" width="110" height="14" fill="#eeeeda"/><text x="24" y="38" fill="#527565" font-size="18">THE SLOW JOURNEY</text></svg></body></html>'
+      : String(body.messages[0].content).includes("Bridge")
+        ? "FINAL_ANSWER: 20"
+        : "Reasoning completed.\nFINAL_ANSWER: 21",
 }));
 const object = await f.object({
   name: "主力编码模型",
@@ -42,6 +44,44 @@ for (let i = 0; i < (process.env.MONITOR_PREVIEW_HISTORY ? 82 : 1); i++) {
   await f.app.idle();
   if (process.env.MONITOR_PREVIEW_HISTORY) f.setNow(f.now + 30 * 60000);
 }
+const reference = (
+  await f.api("baselines", "POST", [
+    {
+      name: "合成参考 · 仅预览",
+      model: "synthetic/reference",
+      iterations: 100,
+      distribution: Array.from({ length: 355 }, (_, i) => (i === 36 ? 1 : 0)),
+    },
+  ])
+).data[0];
+const fingerprint = (
+  await f.api("objects", "POST", {
+    type: "fingerprint",
+    name: "主力模型 · 指纹对照",
+    samples: 50,
+    rows: [
+      {
+        name: "主力模型",
+        target: "test/model",
+        effort: "high",
+        baselineId: reference.id,
+      },
+      {
+        name: "备用路由",
+        target: "group/reasoning",
+        effort: "medium",
+        baselineId: reference.id,
+      },
+    ],
+  })
+).data;
+console.log(
+  "Preparing synthetic fingerprint batch (50 mock CLI attempts, no paid calls)…",
+);
+await f.api(`objects/${fingerprint.id}/run`, "POST", {
+  rowId: fingerprint.rows[0].id,
+});
+await f.app.idle();
 // Development-only parent emulates Magpie's documented hello/theme messages.
 const shell = http.createServer((_req, res) => {
   res.setHeader("Content-Type", "text/html; charset=utf-8");

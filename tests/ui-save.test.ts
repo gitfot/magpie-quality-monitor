@@ -9,6 +9,7 @@ test("saving logic configuration works inside Magpie's scripts-only sandbox", as
     await b.ui
       .getByRole("button", { name: "＋ 新建监测对象", exact: true })
       .click();
+    await b.ui.locator('[data-action="fp-new-legacy"]').click();
     await b.ui.locator('[name="objectName"]').fill("沙盒保存回归");
     await b.ui.locator(".picker summary").click();
     await b.ui
@@ -75,6 +76,7 @@ test("save errors keep the draft, allow retry, and pending saves cannot create d
     await b.ui
       .getByRole("button", { name: "＋ 新建监测对象", exact: true })
       .click();
+    await b.ui.locator('[data-action="fp-new-legacy"]').click();
     await b.ui.locator(".picker summary").click();
     await b.ui
       .getByRole("button", { name: "Model · test/model", exact: true })

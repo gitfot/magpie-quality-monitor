@@ -124,7 +124,7 @@ test("each execution has one right-aligned square even across downtime and nearb
     );
     expect(await b.ui.locator(".historyrecord").count()).toBe(0);
     await b.ui.locator("#dialog .close").click();
-    await b.ui.getByRole("button", { name: "全部历史", exact: true }).click();
+    await b.ui.getByRole("button", { name: "历史", exact: true }).click();
     expect(await b.ui.locator(".historyrecord").count()).toBe(records.length);
   } finally {
     await b.close();

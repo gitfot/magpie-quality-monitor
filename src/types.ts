@@ -26,6 +26,7 @@ export interface MonitorObject {
 }
 export interface Settings {
   retentionDays: number;
+  fingerprintRetentionDays?: number;
   codexPath?: string;
   magpiePath?: string;
   browserPath?: string;
