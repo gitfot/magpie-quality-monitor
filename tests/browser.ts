@@ -1,16 +1,37 @@
 import http from "node:http";
 import { randomInt } from "node:crypto";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { chromium } from "playwright";
 import { fixture } from "./fixture.ts";
 
-export async function embedded(reply?: Parameters<typeof fixture>[0]) {
-  const f = await fixture(reply);
+export async function embedded(
+  reply?: Parameters<typeof fixture>[0],
+  options: { entry?: boolean } = {},
+) {
+  const f = await fixture(reply, { pageDirectory: options.entry });
+  const entryPath = "/_magpie/plugin/" + "0".repeat(32) + "/";
   // Bun can assign low ports that Chromium reserves (for example 1719).
   // Bind test listeners to explicit high ports, without weakening browser security.
-  const host = http.createServer((_req, res) => {
+  const host = http.createServer((req, res) => {
+    if (options.entry && req.url?.startsWith(entryPath)) {
+      res.setHeader("Cache-Control", "no-store");
+      res.setHeader(
+        "Content-Security-Policy",
+        `sandbox allow-scripts; default-src 'none'; script-src http://${req.headers.host}${entryPath}; connect-src 'none'; frame-src 'none'; base-uri 'none'; form-action 'none'`,
+      );
+      if (req.url.split(/[?#]/)[0] === entryPath + "launch.js") {
+        res.setHeader("Content-Type", "text/javascript");
+        res.end(readFileSync(new URL("../page/launch.js", import.meta.url)));
+      } else {
+        res.setHeader("Content-Type", "text/html; charset=utf-8");
+        res.end(readFileSync(join(f.directory, "page", "index.html")));
+      }
+      return;
+    }
     res.setHeader("Content-Type", "text/html; charset=utf-8");
     res.end(
-      `<!doctype html><meta charset="utf-8"><iframe id="monitor" sandbox="allow-scripts" style="width:100%;height:95vh;border:0" src="${f.app.url}/#${f.app.token}"></iframe><script>addEventListener('message',e=>{const frame=document.getElementById('monitor');if(e.source===frame.contentWindow&&e.data?.method==='hello')e.source.postMessage({magpie:1,id:e.data.id,result:{lang:'zh',dark:false}},'*')})</script>`,
+      `<!doctype html><meta charset="utf-8"><iframe id="monitor" sandbox="allow-scripts" style="width:100%;height:95vh;border:0" src="${options.entry ? entryPath + "index.html" : f.app.url + "/#" + f.app.token}"></iframe><script>window.pluginErrors=[];addEventListener('message',e=>{const frame=document.getElementById('monitor');if(e.source!==frame.contentWindow)return;if(e.data?.method==='hello')e.source.postMessage({magpie:1,id:e.data.id,result:{lang:'zh',dark:false}},'*');if(e.data?.method==='error')window.pluginErrors.push(e.data.params?.message)})</script>`,
     );
   });
   let browser: Awaited<ReturnType<typeof chromium.launch>> | undefined;

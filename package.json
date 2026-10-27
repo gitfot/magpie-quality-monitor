@@ -3,10 +3,10 @@
   "scripts": {
     "test": "node scripts/bun.mjs test",
     "test:integration": "node scripts/bun.mjs test tests/integration.test.ts",
-    "test:ui": "node scripts/bun.mjs test tests/ui-save.test.ts tests/ui-preview.test.ts tests/ui-backend.test.ts tests/ui-compact.test.ts tests/ui-history-render.test.ts tests/ui-optimization.test.ts tests/ui-editor.test.ts tests/ui-record-sequence.test.ts",
+    "test:ui": "node scripts/bun.mjs test tests/ui-save.test.ts tests/ui-preview.test.ts tests/ui-backend.test.ts tests/ui-compact.test.ts tests/ui-history-render.test.ts tests/ui-optimization.test.ts tests/ui-editor.test.ts tests/ui-record-sequence.test.ts tests/ui-reconnect.test.ts",
     "typecheck": "tsc --noEmit",
-    "format": "prettier --write src tests ui scripts index.ts agent.js package.json tsconfig.json",
-    "lint": "prettier --check src tests ui scripts index.ts agent.js package.json tsconfig.json",
+    "format": "prettier --write src tests ui scripts page/launch.js index.ts agent.js package.json tsconfig.json",
+    "lint": "prettier --check src tests ui scripts page/launch.js index.ts agent.js package.json tsconfig.json",
     "preview": "node scripts/bun.mjs run scripts/preview.ts",
     "check:privacy": "node scripts/check-privacy.mjs",
     "check:privacy:selftest": "node scripts/check-privacy.mjs --self-test"

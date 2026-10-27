@@ -2,8 +2,13 @@
   "use strict";
   const { t, setLanguage } = globalThis.monitorI18n;
   // The UI capability is separate from the gateway key and stays in this closure.
-  const token = location.hash.slice(1);
+  const fragment = location.hash.slice(1);
+  const launch = new URLSearchParams(fragment);
+  const token = launch.has("token") ? launch.get("token") : fragment;
   history.replaceState(null, "", location.pathname);
+  let entryURL = "",
+    connectionFailures = 0,
+    reconnectAttempts = Number(launch.get("attempt")) || 0;
   let state = null,
     period = 24,
     currentOnly = false,
@@ -99,6 +104,7 @@
   async function api(route, method = "GET", body) {
     const response = await fetch("/api/" + route, {
       method,
+      signal: route === "state" ? AbortSignal.timeout(5000) : undefined,
       headers: {
         Authorization: "Bearer " + token,
         "Content-Type": "application/json",
@@ -107,11 +113,13 @@
     });
     const data = await response.json();
     if (!response.ok) {
-      if (response.status === 401)
-        throw Error(
-          "页面授权已失效，请从 Magpie 插件页重新打开Codex降智检测。",
-        );
-      throw Error(data.error || "操作失败");
+      const error = Error(
+        response.status === 401
+          ? "页面授权已失效，请从 Magpie 插件页重新打开Codex降智检测。"
+          : data.error || "操作失败",
+      );
+      error.reconnect = response.status === 401 || response.status === 503;
+      throw error;
     }
     return data;
   }
@@ -398,9 +406,20 @@
     refreshing = readState(force);
     return refreshing;
   }
+  function reconnect(automatic = false) {
+    if (!entryURL) return automatic ? undefined : refresh(true);
+    const entry = new URL(entryURL);
+    // Entry files can change twice within one Last-Modified timestamp.
+    entry.searchParams.set("reconnect", Date.now() + "-" + Math.random());
+    entry.hash = new URLSearchParams({
+      attempt: String(automatic ? reconnectAttempts + 1 : 0),
+    }).toString();
+    location.replace(entry.href);
+  }
   async function readState(force) {
     try {
       state = await api("state");
+      connectionFailures = reconnectAttempts = 0;
       if (!catalogStarted) {
         catalogStarted = true;
         void refreshCatalog();
@@ -414,6 +433,9 @@
       )
         render();
     } catch (e) {
+      const recoverable =
+        e instanceof TypeError || e.name === "TimeoutError" || e.reconnect;
+      connectionFailures = recoverable ? connectionFailures + 1 : 0;
       notify(e.message);
       if (!$("#connection-error"))
         $("#app").insertAdjacentHTML(
@@ -423,6 +445,13 @@
             button("重新连接", "reopen", "", "small") +
             "</div>",
         );
+      if (
+        connectionFailures >= 2 &&
+        reconnectAttempts < 2 &&
+        !$("#overlay").classList.contains("open") &&
+        !pendingActions.size
+      )
+        reconnect(true);
     } finally {
       refreshing = null;
     }
@@ -740,15 +769,7 @@
     "save-object": (button) => saveForm("objectform", button),
     "save-settings": (button) => saveForm("settingsform", button),
     history: historyList,
-    reopen: () =>
-      parent.postMessage(
-        {
-          magpie: 1,
-          method: "error",
-          params: { message: "请点重试重新连接监测页面" },
-        },
-        "*",
-      ),
+    reopen: () => reconnect(),
     period: (b) => {
       period = Number(b.dataset.hours);
       render();
@@ -930,6 +951,29 @@
   applyTheme({ dark: matchMedia("(prefers-color-scheme: dark)").matches });
   addEventListener("message", (e) => {
     if (e.source !== parent || e.data?.magpie !== 1) return;
+    if (e.data.id === 1 && e.data.result) {
+      try {
+        const entry = new URL(launch.get("entry"));
+        const hostOrigin =
+          (["http:", "https:"].includes(entry.protocol) &&
+            entry.origin === e.origin) ||
+          (entry.protocol === "wails:" &&
+            entry.hostname === "wails.localhost" &&
+            ["null", "wails://wails.localhost"].includes(e.origin));
+        // Only the stable plugin entry on the actual parent may receive a retry.
+        if (
+          hostOrigin &&
+          !entry.username &&
+          !entry.password &&
+          !entry.search &&
+          !entry.hash &&
+          /^\/_magpie\/plugin\/[a-f0-9]{32}\/(?:index\.html)?$/.test(
+            entry.pathname,
+          )
+        )
+          entryURL = entry.href;
+      } catch {}
+    }
     const data =
       e.data.event === "theme"
         ? e.data.data

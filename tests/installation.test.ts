@@ -204,7 +204,8 @@ test("a GitHub installation starts through the real plugin entry and replaces it
     ]);
     clearTimeout(deadline);
     const page = readFileSync(join(installed, "page", "index.html"), "utf8");
-    expect(page.includes('content="0;url=http://127.0.0.1:')).toBe(true);
+    expect(page.includes('data-monitor-url="http://127.0.0.1:')).toBe(true);
+    expect(page.includes('<script src="launch.js"></script>')).toBe(true);
     const ownerFile = join(
       home,
       ".magpie-quality-monitor",

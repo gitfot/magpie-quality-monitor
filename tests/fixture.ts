@@ -9,8 +9,12 @@ export async function fixture(
     body: any,
     req: http.IncomingMessage,
   ) => unknown | Promise<unknown> = () => ({ text: "FINAL_ANSWER: 21" }),
+  options: { pageDirectory?: boolean } = {},
 ) {
   const directory = mkdtempSync(join(tmpdir(), "quality-monitor-"));
+  const pageDirectory = options.pageDirectory
+    ? join(directory, "page")
+    : undefined;
   const calls: any[] = [];
   const gateway = http.createServer(async (req, res) => {
     if (req.url === "/v1/models") {
@@ -109,6 +113,7 @@ if(body.choices[0].finish_reason!=='length')out({type:'turn.completed',usage:{in
   const access = { codexHome: directory, magpiePath, environment: {} };
   let app = await startMonitor({
     directory,
+    pageDirectory,
     timers: false,
     now: () => now,
     access,
@@ -159,6 +164,7 @@ if(body.choices[0].finish_reason!=='length')out({type:'turn.completed',usage:{in
       await app.close();
       app = await startMonitor({
         directory,
+        pageDirectory,
         timers: false,
         now: () => now,
         port,

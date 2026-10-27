@@ -201,3 +201,51 @@ Verification on Windows on 2026-10-27: typecheck and formatting passed; the full
 isolated suite passed 115 tests with 2 optional installed-binary tests skipped,
 0 failures and 4,049 assertions across 19 files. Privacy-scanner self-tests passed
 all 15 checks, and the working-tree scan reported no configured-rule findings.
+
+## Reconnection After Plugin Updates
+
+The generated plugin entry now loads a packaged external launcher, which is
+allowed by Magpie's existing page CSP. It preserves the stable plugin entry in
+the runtime URL fragment, together with the per-start UI capability, and the
+runtime immediately removes that fragment from its visible URL. No capability
+is placed in query strings, browser storage or parent messages.
+Reconnects use a credential-free cache-busting query so same-second entry rewrites
+cannot be mistaken for an unchanged `Last-Modified` response.
+
+The runtime accepts a return entry only after a hello response from its actual
+parent. HTTP(S) entries must match that parent's origin and the plugin-entry
+path; native Wails entries are restricted to `wails.localhost`. Other paths,
+credentials, query strings and fragments are rejected. The host sandbox, CSP,
+API authorization and per-start capability rotation remain unchanged.
+
+Two consecutive transport, timeout, authorization or service-unavailable failures
+can reopen the stable entry automatically. State requests have a five-second
+timeout. Automatic navigation waits while a dialog or mutation is open, and is
+limited to two entry reloads without a successful state read. A single transient
+failure can recover in place. The reconnect button returns directly to the entry
+instead of sending the host an error; direct preview/legacy launches without a
+verified entry retry state in place.
+
+Browser regressions exercise the generated entry and packaged launcher under a
+scripts-only sandbox and a restrictive host CSP. They cover changed ports,
+rotated capabilities on the same port, automatic recovery, preserved monitor
+configuration and unsaved input, transient failures, direct-launch fallback,
+untrusted return addresses and bounded retries. The real plugin-entry installation
+test also checks that the launcher is referenced. Fixtures use temporary state
+and mock CLIs only, with no paid-provider calls or changes to daily installations.
+
+An already-open page from a version predating this fix still has the old reconnect
+handler. Reopen it once through Magpie's Retry or reload the window to load the new
+launcher and runtime. Subsequent updates can then use the stable return entry.
+
+Verification on Windows on 2026-10-27: the new-port reconnect regression failed
+before the production fix, then all seven reconnection regressions passed. The
+final full isolated suite passed 122 tests with 2 optional installed-binary skips,
+0 failures and 4,082 assertions across 20 files. Typecheck, formatting, all 15
+privacy-scanner self-tests, the 70-file working-tree privacy scan and diff
+whitespace checks passed. Package dry-run lists 28 files including the launcher,
+with no tests or runtime state bundled. The first restricted suite run could not
+complete native Windows process and screenshot checks; the final suite ran with
+the required process permissions and passed those checks without weakening their
+assertions. Native desktop acceptance and the published GitHub update path were
+not re-run, and the fix was not deployed to the daily installation.

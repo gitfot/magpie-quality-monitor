@@ -450,7 +450,7 @@ export async function startMonitor(options: MonitorOptions) {
       mkdirSync(options.pageDirectory, { recursive: true });
       atomic(
         join(options.pageDirectory, "index.html"),
-        `<!doctype html><meta charset="utf-8"><meta http-equiv="refresh" content="0;url=${url}/#${token}"><p>正在打开Codex降智检测…</p>`,
+        `<!doctype html><meta charset="utf-8"><body data-monitor-url="${url}/#${token}"><p>正在打开Codex降智检测…</p><script src="launch.js"></script>`,
       );
     }
     if (options.timers !== false)
