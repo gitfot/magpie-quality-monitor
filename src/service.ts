@@ -165,14 +165,14 @@ export async function startMonitor(options: MonitorOptions) {
       }
       if (path === "/api/catalog" && req.method === "GET") {
         const result = await access.refresh();
-        if (!result.connected) throw new HTTPError(409, result.reason);
+        if (result.catalogError) throw new HTTPError(409, result.catalogError);
         json(res, result);
         return;
       }
       if (path === "/api/objects" && req.method === "POST") {
         const object = validate(await body(req));
-        await access.refresh();
-        access.assert(object.target);
+        access.assertConnected();
+        access.assertSelectable(object.target);
         store.save(object);
         json(res, object, 201);
         return;
@@ -189,13 +189,14 @@ export async function startMonitor(options: MonitorOptions) {
         }
         if (req.method === "PUT" && !objectRoute[2]) {
           const object = validate(await body(req), old);
+          if (object.target !== old.target)
+            access.assertSelectable(object.target);
           if (
             object.target !== old.target ||
             old.needsConversion ||
             (object.enabled && !old.enabled)
           ) {
-            await access.refresh();
-            access.assert(object.target);
+            access.assertConnected();
           }
           if (!object.enabled && old.enabled) engine.cancel(old.id);
           if (object.enabled && !old.enabled) object.nextAt = now();

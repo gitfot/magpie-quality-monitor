@@ -1,6 +1,6 @@
 import { readFileSync, existsSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
-import { isAbsolute, join, basename, resolve } from "node:path";
+import { isAbsolute, join, basename } from "node:path";
 import { TOML } from "bun";
 import { findExecutable, launch, terminate } from "./codex.ts";
 import { HTTPError, type Model, type Settings } from "./types.ts";
@@ -10,6 +10,7 @@ export interface AccessState {
   reason: string;
   models: Model[];
   updatedAt: number | null;
+  catalogError: string;
 }
 export interface AccessOptions {
   codexHome?: string;
@@ -145,15 +146,13 @@ async function query(executable: string, args: string[]): Promise<string> {
 }
 
 export class CodexAccess {
-  private state: AccessState = {
-    connected: false,
-    reason: "尚未读取原生 Codex 接入与模型目录",
-    models: [],
-    updatedAt: null,
-  };
-  private baseURL = "";
+  private catalog: Pick<AccessState, "models" | "updatedAt" | "catalogError"> =
+    {
+      models: [],
+      updatedAt: null,
+      catalogError: "尚未读取模型目录",
+    };
   private pending: Promise<AccessState> | null = null;
-  private attemptedAt = -Infinity;
   private stopped = false;
   constructor(
     private settings: () => Settings,
@@ -162,6 +161,7 @@ export class CodexAccess {
   ) {}
 
   private verify(): string | null {
+    // Trust the local provider declaration, not catalog availability or membership.
     try {
       const env = this.options.environment ?? process.env;
       const home =
@@ -189,39 +189,28 @@ export class CodexAccess {
       if (
         !provider ||
         provider.wire_api !== "responses" ||
-        provider.base_url?.replace(/\/$/, "") !== this.baseURL
+        typeof provider.base_url !== "string"
       )
         return "Codex 接入配置已改变或无法确认，停止新执行";
-      const catalog = config.model_catalog_json;
-      if (
-        typeof catalog !== "string" ||
-        basename(catalog) !== "magpie-models.json" ||
-        !existsSync(resolve(home, catalog))
-      )
-        return "无法确认 Codex 的 Magpie 模型目录配置";
-      if (!this.state.models.some((m) => m.id === config.model))
-        return "Codex 当前模型不在已读取的可见目录中";
+      const address = new URL(provider.base_url);
+      if (!["http:", "https:"].includes(address.protocol) || !address.hostname)
+        return "Codex 接入配置已改变或无法确认，停止新执行";
       return null;
     } catch {
       return "无法读取或识别原生 Codex 接入配置，停止新执行";
     }
   }
   snapshot(): AccessState {
-    const reason =
-      this.state.updatedAt === null || !this.state.connected
-        ? this.state.reason
-        : this.verify();
+    const reason = this.verify();
     return {
-      ...this.state,
-      connected: this.state.connected && !reason,
-      reason: reason || "原生 Codex 已接入 Magpie（有限兼容检查）",
+      ...this.catalog,
+      connected: !this.stopped && !reason,
+      reason: reason || "本地 Codex 配置声明接入 Magpie（未交叉验证网关）",
     };
   }
-  async refresh(force = true): Promise<AccessState> {
+  async refresh(): Promise<AccessState> {
     if (this.stopped) return { ...this.snapshot(), connected: false };
     if (this.pending) return this.pending;
-    if (!force && this.now() - this.attemptedAt < 30000) return this.snapshot();
-    this.attemptedAt = this.now();
     this.pending = (async () => {
       let reason =
         "找不到 Magpie CLI；请在设置中填写正在运行的 Magpie 可执行文件绝对路径";
@@ -255,22 +244,15 @@ export class CodexAccess {
         const text = await query(executable, ["models", "codex"]);
         reason = "Magpie CLI 模型目录格式不受支持；请检查版本后刷新";
         const catalog = parseCatalog(text);
-        this.baseURL = catalog.baseURL;
-        this.state = {
-          connected: true,
-          reason: "",
+        this.catalog = {
           models: catalog.models,
           updatedAt: this.now(),
+          catalogError: "",
         };
-        const connectionReason = this.verify();
-        this.state.connected = !connectionReason;
-        this.state.reason =
-          connectionReason || "原生 Codex 已接入 Magpie（有限兼容检查）";
       } catch {
-        this.state = {
-          ...this.state,
-          connected: false,
-          reason,
+        this.catalog = {
+          ...this.catalog,
+          catalogError: reason,
         };
       }
       return this.snapshot();
@@ -281,14 +263,13 @@ export class CodexAccess {
       this.pending = null;
     }
   }
-  assert(target: string) {
+  assertConnected() {
     const state = this.snapshot();
     if (!state.connected) throw new HTTPError(409, state.reason);
-    if (!state.models.some((m) => m.id === target))
-      throw new HTTPError(
-        409,
-        "所选模型已不在 Codex 可见目录中；请重新选择，历史仍保留",
-      );
+  }
+  assertSelectable(target: string) {
+    if (!this.catalog.models.some((model) => model.id === target))
+      throw new HTTPError(409, "请从下拉目录选择");
   }
   async close() {
     this.stopped = true;

@@ -39,7 +39,7 @@ test("overview catalog cold start refreshes automatically and shares loading wit
     ).not.toBe("none");
     expect(
       await b.ui.locator('.catalog-feedback[role="status"]').innerText(),
-    ).toBe("正在检查原生 Codex 接入与模型目录…");
+    ).toBe("正在刷新模型目录…");
     expect(await b.ui.locator(".connection.warning:visible").count()).toBe(0);
     expect(await b.ui.locator(".card h2").innerText()).toBe("Primary");
     expect(await b.ui.locator(".bars button").count()).toBe(1);
@@ -107,19 +107,11 @@ test("overview catalog manual refresh shows loading in every language without lo
       path: ".test-artifacts/catalog-loading-desktop.png",
     });
     for (const [lang, busy, status] of [
-      ["zh", "正在刷新…", "正在检查原生 Codex 接入与模型目录…"],
-      [
-        "en",
-        "Refreshing…",
-        "Checking native Codex connection and model catalog…",
-      ],
-      ["zh-TW", "正在重新整理…", "正在檢查原生 Codex 接入與模型目錄…"],
-      ["ja", "更新中…", "ネイティブ Codex の接続とモデル一覧を確認中…"],
-      [
-        "de",
-        "Wird aktualisiert…",
-        "Native Codex-Verbindung und Modellkatalog werden geprüft…",
-      ],
+      ["zh", "正在刷新…", "正在刷新模型目录…"],
+      ["en", "Refreshing…", "Refreshing model catalog…"],
+      ["zh-TW", "正在重新整理…", "正在重新整理模型目錄…"],
+      ["ja", "更新中…", "モデル一覧を更新中…"],
+      ["de", "Wird aktualisiert…", "Modellkatalog wird aktualisiert…"],
     ]) {
       await b.page
         .locator("#monitor")

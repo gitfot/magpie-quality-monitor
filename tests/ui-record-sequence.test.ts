@@ -415,10 +415,10 @@ test("disabled logic and drawing tests can run once without enabling them or sho
     await b.ui.locator(".connection.warning").waitFor();
     expect(
       await b.ui.locator('.logicitem [data-action="run"]').isDisabled(),
-    ).toBe(true);
+    ).toBe(false);
     expect(
       await b.ui.locator('.drawing-tests [data-action="run"]').isDisabled(),
-    ).toBe(true);
+    ).toBe(false);
   } finally {
     await b.close();
   }

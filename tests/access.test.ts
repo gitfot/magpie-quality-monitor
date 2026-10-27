@@ -62,7 +62,7 @@ test.skipIf(process.platform !== "win32")(
         expect(await done).toBe(0);
         // This is a renamed Bun binary, not Magpie: reaching the version check
         // proves native parent discovery succeeded without trusting its name.
-        expect(JSON.parse(output).reason).toBe(
+        expect(JSON.parse(output).catalogError).toBe(
           "Magpie CLI 版本不受支持；仅支持 magpie 0.1.x",
         );
         expect(f.calls).toHaveLength(0);
@@ -124,7 +124,7 @@ test.skipIf(process.platform !== "win32")(
           parentExecutable: async () => null,
         });
         try {
-          expect((await access.refresh()).reason).toBe(
+          expect((await access.refresh()).catalogError).toBe(
             "Magpie CLI 版本不受支持；仅支持 magpie 0.1.x",
           );
         } finally {
@@ -150,8 +150,8 @@ test("catalog errors identify missing CLI, launch failure, version, command and 
       });
       try {
         const state = await access.refresh();
-        expect(state.connected).toBe(false);
-        expect(state.reason).toBe(reason);
+        expect(state.connected).toBe(true);
+        expect(state.catalogError).toBe(reason);
       } finally {
         await access.close();
       }
@@ -269,23 +269,146 @@ test("native Codex configuration, not the former plugin Agent, gates execution a
   }
 });
 
-test("removed targets and unreadable catalog formats block new runs without deleting history", async () => {
+test("local access trusts a valid provider declaration without catalog or gateway cross-checking", async () => {
+  const f = await fixture();
+  const config = readFileSync(f.connectionFile, "utf8");
+  const access = new CodexAccess(
+    () => ({ retentionDays: 5 }),
+    Date.now,
+    f.access,
+  );
+  try {
+    expect(access.snapshot().models).toHaveLength(0);
+    expect(access.snapshot().connected).toBe(true);
+    for (const invalid of [
+      config.replace('wire_api = "responses"', 'wire_api = "chat"'),
+      config.replace(f.link.baseURL, "file:///not-a-gateway"),
+      config.replace(f.link.baseURL, "not-a-url"),
+    ]) {
+      writeFileSync(f.connectionFile, invalid);
+      expect(access.snapshot().connected).toBe(false);
+      expect(() => access.assertConnected()).toThrow();
+    }
+    writeFileSync(
+      f.connectionFile,
+      config
+        .replace(f.link.baseURL, "http://127.0.0.1:9999/v1")
+        .replace('model = "test/model"', 'model = "unknown/model"'),
+    );
+    expect(access.snapshot().connected).toBe(true);
+    expect(() => access.assertConnected()).not.toThrow();
+    expect(f.calls).toHaveLength(0);
+  } finally {
+    await access.close();
+    await f.close();
+  }
+});
+
+test("removed targets and unreadable catalogs do not gate execution or configuration", async () => {
   const f = await fixture();
   try {
     const o = await f.object();
     await f.api(`objects/${o.id}/run`, "POST", {});
     await f.app.idle();
-    const before = (await f.api("export")).data.records;
     const catalog = readFileSync(f.catalogFile, "utf8");
     writeFileSync(f.catalogFile, catalog.replace(/  test\/model[^\n]*\n/, ""));
-    expect((await f.api(`objects/${o.id}/run`, "POST", {})).status).toBe(409);
+    expect((await f.api("catalog")).status).toBe(200);
+    expect((await f.api(`objects/${o.id}/run`, "POST", {})).status).toBe(202);
+    await f.app.idle();
     writeFileSync(f.catalogFile, "new unknown format");
     expect((await f.api("catalog")).status).toBe(409);
-    expect((await f.api("export")).data.records).toEqual(before);
+    const enabled = await f.api(`objects/${o.id}`, "PUT", {
+      ...o,
+      name: "Keep the original target",
+      enabled: true,
+    });
+    expect(enabled.status).toBe(200);
+    expect(enabled.data.target).toBe("test/model");
+    expect((await f.api(`objects/${o.id}/run`, "POST", {})).status).toBe(202);
+    await f.app.idle();
+    expect((await f.api("export")).data.records).toHaveLength(3);
+    expect((await f.api("state")).data.connection.connected).toBe(true);
     writeFileSync(f.catalogFile, catalog);
     expect((await f.api("catalog")).status).toBe(200);
     expect((await f.api("state")).data.connection.updatedAt).toBe(f.now);
   } finally {
+    await f.close();
+  }
+});
+
+test("cold-start execution, saving and scheduling never invoke the catalog CLI", async () => {
+  const f = await fixture();
+  try {
+    const invoked = join(f.directory, "catalog-invoked");
+    const o = await f.object();
+    await f.restart();
+    writeFileSync(
+      join(f.directory, "magpie.mjs"),
+      `import{writeFileSync}from'node:fs';writeFileSync(${JSON.stringify(invoked)},'called');process.exit(1);`,
+    );
+    expect((await f.api("state")).data.connection.connected).toBe(true);
+    expect((await f.api("state")).data.connection.models).toHaveLength(0);
+    expect(
+      (
+        await f.api("objects", "POST", {
+          name: "Needs a selection",
+          target: o.target,
+          tests: [],
+        })
+      ).status,
+    ).toBe(409);
+    expect((await f.api(`objects/${o.id}/run`, "POST", {})).status).toBe(202);
+    await f.app.idle();
+    expect(
+      (await f.api(`objects/${o.id}`, "PUT", { ...o, enabled: true })).status,
+    ).toBe(200);
+    await f.app.tick();
+    await f.app.idle();
+    expect(f.calls).toHaveLength(2);
+    expect(existsSync(invoked)).toBe(false);
+  } finally {
+    await f.close();
+  }
+});
+
+test("a pending catalog query does not delay saving, enabling or enqueueing", async () => {
+  const f = await fixture();
+  const ready = join(f.directory, "catalog-ready"),
+    release = join(f.directory, "catalog-release");
+  let catalog: ReturnType<typeof f.api> | undefined;
+  try {
+    const o = await f.object();
+    writeFileSync(
+      join(f.directory, "magpie.mjs"),
+      `import{writeFileSync,existsSync,readFileSync}from'node:fs';
+if(process.argv.includes('--version'))console.log('magpie 0.1.1549');
+else{writeFileSync(${JSON.stringify(ready)},'ready');while(!existsSync(${JSON.stringify(release)}))await new Promise(r=>setTimeout(r,10));console.log(readFileSync(${JSON.stringify(f.catalogFile)},'utf8'));}`,
+    );
+    catalog = f.api("catalog");
+    const deadline = Date.now() + 5000;
+    while (!existsSync(ready)) {
+      if (Date.now() > deadline) throw Error("Catalog query did not start");
+      await Bun.sleep(10);
+    }
+    const operations = (async () => {
+      expect(
+        (await f.api(`objects/${o.id}`, "PUT", { ...o, enabled: true })).status,
+      ).toBe(200);
+      expect((await f.api(`objects/${o.id}/run`, "POST", {})).status).toBe(202);
+      expect((await f.object({ name: "Another object" })).id).toBeTruthy();
+    })();
+    await Promise.race([
+      operations,
+      Bun.sleep(1500).then(() => {
+        throw Error("Operations waited for the catalog");
+      }),
+    ]);
+    expect(existsSync(release)).toBe(false);
+    await f.app.idle();
+    expect(f.calls).toHaveLength(1);
+  } finally {
+    writeFileSync(release, "release");
+    await catalog;
     await f.close();
   }
 });

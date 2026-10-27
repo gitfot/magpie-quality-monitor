@@ -136,6 +136,7 @@ if(body.choices[0].finish_reason!=='length')out({type:'turn.completed',usage:{in
       })
     ).data;
   await api("settings", "PUT", { retentionDays: 5, codexPath: executable });
+  await api("catalog");
   return {
     directory,
     connectionFile,

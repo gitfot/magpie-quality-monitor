@@ -2,6 +2,28 @@
 // before entering markup, so user content never becomes a translation key.
 (() => {
   const messages = {
+    "正在启用…": ["Enabling…", "正在啟用…", "有効化中…", "Wird aktiviert…"],
+    "正在暂停…": ["Pausing…", "正在暫停…", "一時停止中…", "Wird pausiert…"],
+    "正在提交…": ["Submitting…", "正在提交…", "送信中…", "Wird gesendet…"],
+    尚未读取模型目录: [
+      "Model catalog not loaded",
+      "尚未讀取模型目錄",
+      "モデル一覧を未取得",
+      "Modellkatalog noch nicht geladen",
+    ],
+    "本地 Codex 配置声明接入 Magpie（未交叉验证网关）": [
+      "Local Codex configuration declares Magpie access (gateway not cross-checked)",
+      "本機 Codex 設定宣告接入 Magpie（未交叉驗證閘道）",
+      "ローカル Codex 設定は Magpie 接続を指定（ゲートウェイの照合なし）",
+      "Lokale Codex-Konfiguration verwendet Magpie (Gateway nicht gegengeprüft)",
+    ],
+    "仅检查本地 Codex 的 Magpie 接入声明，不交叉验证网关地址。目录仅用于选择模型；读取失败或目标已移除不阻止执行，实际调用失败会留记录。":
+      [
+        "Only the local Codex Magpie configuration is checked; the gateway address is not cross-checked. The catalog is for model selection only. Catalog errors or removed targets do not block execution; actual call failures are recorded.",
+        "僅檢查本機 Codex 的 Magpie 接入宣告，不交叉驗證閘道位址。目錄僅用於選擇模型；讀取失敗或目標已移除不阻止執行，實際呼叫失敗會留紀錄。",
+        "ローカル Codex の Magpie 接続設定のみ確認し、ゲートウェイのアドレスは照合しません。一覧はモデル選択用です。取得失敗やモデル削除でも実行を妨げず、実際の呼び出し失敗を記録します。",
+        "Nur die lokale Codex-Magpie-Konfiguration wird geprüft, nicht die Gateway-Adresse. Der Katalog dient nur der Modellauswahl. Katalogfehler oder entfernte Ziele blockieren keine Ausführung; tatsächliche Aufruffehler werden protokolliert.",
+      ],
     "正在刷新…": [
       "Refreshing…",
       "正在重新整理…",

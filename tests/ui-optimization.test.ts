@@ -1,5 +1,6 @@
 import { test, expect } from "bun:test";
 import { join } from "node:path";
+import { writeFileSync } from "node:fs";
 import { embedded } from "./browser.ts";
 
 test("missing CLI shows actionable translated diagnostics without blaming Codex connection or hiding history", async () => {
@@ -51,8 +52,204 @@ test("missing CLI shows actionable translated diagnostics without blaming Codex 
     expect(b.f.calls).toHaveLength(1);
     expect(
       await b.ui.locator('.cardhead [data-action="run"]').isDisabled(),
-    ).toBe(true);
+    ).toBe(false);
   } finally {
+    await b.close();
+  }
+}, 30000);
+
+test("toggle feedback is immediate, survives rendering and recovers from failure", async () => {
+  const b = await embedded();
+  let release = () => {};
+  try {
+    const o = await b.f.object();
+    await b.page.reload();
+    const toggle = b.ui.locator('[data-action="toggle"]');
+    for (const failing of [false, true]) {
+      const gate = new Promise<void>((r) => (release = r));
+      let requests = 0;
+      await b.page.route(`**/api/objects/${o.id}`, async (route) => {
+        requests++;
+        await gate;
+        if (failing)
+          await route.fulfill({
+            status: 409,
+            json: { error: "Toggle fixture failure" },
+          });
+        else await route.continue();
+      });
+      const request = b.page.waitForRequest(`**/api/objects/${o.id}`);
+      await toggle.click();
+      await request;
+      expect(await toggle.innerText()).toBe(
+        failing ? "正在暂停…" : "正在启用…",
+      );
+      expect(await toggle.isDisabled()).toBe(true);
+      expect(await toggle.getAttribute("aria-busy")).toBe("true");
+      expect((await b.f.api("state")).data.objects[0].enabled).toBe(failing);
+      await b.ui
+        .getByRole("button", { name: "最近 7 天", exact: true })
+        .click();
+      expect(await toggle.isDisabled()).toBe(true);
+      expect(await b.ui.locator('[data-action="run"]:enabled').count()).toBe(0);
+      await toggle.evaluate((el) => (el as HTMLButtonElement).click());
+      expect(requests).toBe(1);
+      release();
+      await b.ui.locator('[data-action="toggle"]:enabled').waitFor();
+      expect(await toggle.innerText()).toBe("暂停");
+      expect((await b.f.api("state")).data.objects[0].enabled).toBe(true);
+      if (failing)
+        expect(await b.ui.locator("#toast").innerText()).toBe(
+          "Toggle fixture failure",
+        );
+      await b.page.unroute(`**/api/objects/${o.id}`);
+    }
+  } finally {
+    release();
+    await b.close();
+  }
+}, 30000);
+
+test("single and whole-round submissions disable related buttons before acceptance", async () => {
+  const b = await embedded();
+  let release = () => {};
+  try {
+    const o = await b.f.object();
+    for (const single of [true, false]) {
+      await b.page.reload();
+      const gate = new Promise<void>((r) => (release = r));
+      let requests = 0;
+      await b.page.route(`**/api/objects/${o.id}/run`, async (route) => {
+        requests++;
+        await gate;
+        await route.continue();
+      });
+      const run = b.ui.locator(
+        single
+          ? '.logicitem [data-action="run"]'
+          : '.cardhead [data-action="run"]',
+      );
+      const request = b.page.waitForRequest(`**/api/objects/${o.id}/run`);
+      await run.click();
+      const sent = await request;
+      expect(sent.postDataJSON()).toEqual(
+        single ? { testId: o.tests[0].id } : {},
+      );
+      expect(await run.innerText()).toBe("正在提交…");
+      expect(await run.isDisabled()).toBe(true);
+      expect(await b.ui.locator('[data-action="toggle"]').isDisabled()).toBe(
+        true,
+      );
+      expect(await b.ui.locator('[data-action="run"]:enabled').count()).toBe(0);
+      await run.evaluate((el) => (el as HTMLButtonElement).click());
+      expect(requests).toBe(1);
+      release();
+      await b.ui.locator('[data-action="toggle"]:enabled').waitFor();
+      await b.f.app.idle();
+      await b.page.unroute(`**/api/objects/${o.id}/run`);
+    }
+    expect(b.f.calls).toHaveLength(2);
+  } finally {
+    release();
+    await b.close();
+  }
+}, 30000);
+
+test("a mutation queues a fresh state read after an older poll instead of waiting five seconds", async () => {
+  const b = await embedded();
+  let release = () => {};
+  try {
+    const o = await b.f.object();
+    await b.page.clock.install();
+    await b.page.clock.pauseAt(new Date(Date.now() + 1000));
+    await b.page.reload();
+    await b.ui.locator('[data-action="toggle"]').waitFor();
+    const gate = new Promise<void>((r) => (release = r));
+    let entered = () => {};
+    const started = new Promise<void>((r) => (entered = r));
+    let reads = 0;
+    await b.page.route("**/api/state", async (route) => {
+      reads++;
+      const response = await route.fetch();
+      if (reads === 1) {
+        entered();
+        await gate;
+      }
+      await route.fulfill({ response });
+    });
+    await b.page.clock.runFor(5000);
+    await started;
+    const accepted = b.page.waitForResponse(`**/api/objects/${o.id}`);
+    await b.ui.locator('[data-action="toggle"]').click();
+    expect((await accepted).status()).toBe(200);
+    expect((await b.f.api("state")).data.objects[0].enabled).toBe(true);
+    release();
+    await b.ui.locator('[data-action="toggle"]:enabled').waitFor();
+    expect(await b.ui.locator('[data-action="toggle"]').innerText()).toBe(
+      "暂停",
+    );
+    expect(await b.ui.locator('.cardhead [role="status"]').innerText()).toBe(
+      "监测中",
+    );
+    expect(reads).toBe(2);
+  } finally {
+    release();
+    await b.close();
+  }
+}, 30000);
+
+test("pending and failed catalog refreshes do not block existing objects or erase their target", async () => {
+  const b = await embedded();
+  let release = () => {};
+  try {
+    const o = await b.f.object();
+    await b.page.reload();
+    await b.ui.locator('[data-action="refresh-catalog"]:enabled').waitFor();
+    const gate = new Promise<void>((r) => (release = r));
+    await b.page.route("**/api/catalog", async (route) => {
+      await gate;
+      await route.fulfill({
+        status: 409,
+        json: { error: "Catalog fixture failure" },
+      });
+    });
+    const started = b.page.waitForRequest("**/api/catalog");
+    await b.ui.locator('[data-action="refresh-catalog"]').click();
+    await started;
+    expect(
+      await b.ui.locator('.cardhead [data-action="run"]').isEnabled(),
+    ).toBe(true);
+    await b.ui.locator('[data-action="toggle"]').click();
+    await b.ui.locator('[data-action="toggle"]:enabled').waitFor();
+    expect(await b.ui.locator('[data-action="toggle"]').innerText()).toBe(
+      "暂停",
+    );
+    release();
+    await b.ui
+      .locator(".catalog-feedback")
+      .filter({ hasText: "Catalog fixture failure" })
+      .waitFor();
+    expect(
+      await b.ui.locator('.cardhead [data-action="run"]').isEnabled(),
+    ).toBe(true);
+    writeFileSync(
+      b.f.catalogFile,
+      "  Provider\n  group/analysis  Analysis  high\n  " +
+        b.f.link.baseURL +
+        "\n",
+    );
+    await b.f.api("catalog");
+    await b.ui.getByRole("button", { name: "编辑", exact: true }).click();
+    await b.ui.locator('[name="objectName"]').fill("Preserved target");
+    expect(await b.ui.locator('[name="target"]').inputValue()).toBe(o.target);
+    await b.ui.getByRole("button", { name: "保存配置", exact: true }).click();
+    await b.ui.locator("#overlay.open").waitFor({ state: "hidden" });
+    const saved = (await b.f.api("state")).data.objects[0];
+    expect(saved.target).toBe(o.target);
+    expect(saved.name).toBe("Preserved target");
+    expect(b.f.calls).toHaveLength(0);
+  } finally {
+    release();
     await b.close();
   }
 }, 30000);

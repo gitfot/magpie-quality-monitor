@@ -9,12 +9,13 @@
     currentOnly = false,
     editing = null,
     focusBefore = null,
-    refreshing = false,
+    refreshing = null,
     catalogStarted = false,
     catalogRequest = null,
     catalogError = "",
     modalContext = null,
     rendered = "";
+  const pendingActions = new Map();
   const $ = (s) => document.querySelector(s);
   const timelineSlots = new Map();
   const timelineTargets = new Map();
@@ -78,6 +79,23 @@
   );
   const button = (text, action, attrs = "", className = "") =>
     `<button type="button" class="${className}" data-action="${action}" ${t(attrs)}>${t(text)}</button>`;
+  function runButton(object, test, className) {
+    const pending = pendingActions.get(object.id),
+      submitting =
+        pending?.action === "run" && pending.testId === (test?.id || "");
+    return button(
+      submitting
+        ? "正在提交…"
+        : test
+          ? test.kind === "logic"
+            ? "▷ 单题运行"
+            : "▷ 运行"
+          : "▷ 执行一轮",
+      "run",
+      `data-id="${object.id}" ${test ? `data-test="${test.id}"` : ""} aria-busy="${submitting}" ${pending || state.busy.includes(object.id) || objectReason(object) ? "disabled" : ""}`,
+      className,
+    );
+  }
   async function api(route, method = "GET", body) {
     const response = await fetch("/api/" + route, {
       method,
@@ -201,7 +219,7 @@
     const countText = t("展示最近 {shown} 条 / 共 {total} 条")
       .replace("{shown}", visible.length)
       .replace("{total}", rows.length);
-    return `<div class="logicitem"><div class="flex between"><h3>${escape(test.name)} <span class="tag">逻辑题</span>${test.enabled ? "" : " <small>已停用</small>"}</h3>${button("▷ 单题运行", "run", `data-id="${object.id}" data-test="${test.id}" ${state.busy.includes(object.id) || objectReason(object) ? "disabled" : ""}`, "plain small")}</div><div class="flex logicstats"><span class="percent">${pct}<small>%</small></span><small>答案正确 ${correct}/${graded.length} · 调用成功 ${success.length}/${rows.length}${!currentOnly && rows.some((r) => r.historyKey !== test.historyKey) ? " · 跨配置统计" : ""}${formats ? ` · 格式异常 ${formats}` : ""}${truncated ? ` · 截断 ${truncated}` : ""}</small></div><div class="timeline"><div class="bars" data-timeline="${escape(key)}">${Array.from(
+    return `<div class="logicitem"><div class="flex between"><h3>${escape(test.name)} <span class="tag">逻辑题</span>${test.enabled ? "" : " <small>已停用</small>"}</h3>${runButton(object, test, "plain small")}</div><div class="flex logicstats"><span class="percent">${pct}<small>%</small></span><small>答案正确 ${correct}/${graded.length} · 调用成功 ${success.length}/${rows.length}${!currentOnly && rows.some((r) => r.historyKey !== test.historyKey) ? " · 跨配置统计" : ""}${formats ? ` · 格式异常 ${formats}` : ""}${truncated ? ` · 截断 ${truncated}` : ""}</small></div><div class="timeline"><div class="bars" data-timeline="${escape(key)}">${Array.from(
       { length: slots - visible.length },
       () =>
         `<span class="timeline-empty" title="${escape(t("暂无执行记录"))}" aria-hidden="true"></span>`,
@@ -233,20 +251,18 @@
       ),
       latest = rows.find((r) => r.hasArtifact),
       last = rows[0];
-    return `<div class="testrow"><div class="flex between artheading"><h3>${escape(test.name)} <span class="tag">绘图</span></h3>${button("▷ 运行", "run", `data-id="${object.id}" data-test="${test.id}" ${state.busy.includes(object.id) || objectReason(object) ? "disabled" : ""}`, "plain small")}</div>${latest ? `<div class="artstage" data-artifact="${latest.id}" data-preview="${latest.id}">${button("放大 ↗", "detail", `data-id="${latest.id}"`, "small")}</div>` : '<div class="empty art-empty">尚无完整作品</div>'}<div class="flex between artcaption"><div class="artmetrics"><small>创建于 ${time(latest?.finishedAt ?? latest?.at)}</small><br><small>耗时 ${latest && Number.isFinite(latest.finishedAt - latest.at) && latest.finishedAt >= latest.at ? ((latest.finishedAt - latest.at) / 60000).toFixed(2) : "—"} 分钟 · Token ${latest?.tokenTotal != null ? (latest.tokenTotal / 1000).toFixed(2) + "k" : "—"}</small>${latest && latest.historyKey !== test.historyKey ? '<br><small class="old-config">来自旧配置</small>' : ""}</div>${button("历史图片 ↗", "gallery", `data-test="${test.id}" data-name="${escape(test.name)}"`, "small")}</div>${last && !last.hasArtifact ? `<div class="warning">${time(last.at)} · ${escape(label[last.verdict] || label[last.call] || "未提取到完整作品")}；${latest ? "当前展示旧作品" : "尚无作品"} ${button("详情", "detail", `data-id="${last.id}"`, "plain small")}</div>` : ""}</div>`;
+    return `<div class="testrow"><div class="flex between artheading"><h3>${escape(test.name)} <span class="tag">绘图</span></h3>${runButton(object, test, "plain small")}</div>${latest ? `<div class="artstage" data-artifact="${latest.id}" data-preview="${latest.id}">${button("放大 ↗", "detail", `data-id="${latest.id}"`, "small")}</div>` : '<div class="empty art-empty">尚无完整作品</div>'}<div class="flex between artcaption"><div class="artmetrics"><small>创建于 ${time(latest?.finishedAt ?? latest?.at)}</small><br><small>耗时 ${latest && Number.isFinite(latest.finishedAt - latest.at) && latest.finishedAt >= latest.at ? ((latest.finishedAt - latest.at) / 60000).toFixed(2) : "—"} 分钟 · Token ${latest?.tokenTotal != null ? (latest.tokenTotal / 1000).toFixed(2) + "k" : "—"}</small>${latest && latest.historyKey !== test.historyKey ? '<br><small class="old-config">来自旧配置</small>' : ""}</div>${button("历史图片 ↗", "gallery", `data-test="${test.id}" data-name="${escape(test.name)}"`, "small")}</div>${last && !last.hasArtifact ? `<div class="warning">${time(last.at)} · ${escape(label[last.verdict] || label[last.call] || "未提取到完整作品")}；${latest ? "当前展示旧作品" : "尚无作品"} ${button("详情", "detail", `data-id="${last.id}"`, "plain small")}</div>` : ""}</div>`;
   }
   function objectReason(object) {
     if (object.needsConversion || backend(object) !== "codex-cli")
       return "旧直连对象待确认转为 Codex CLI";
-    if (!state.connection.connected)
-      return catalogRequest && state.connection.updatedAt === null
-        ? "正在检查原生 Codex 接入与模型目录…"
-        : state.connection.reason;
-    if (!state.connection.models.some((m) => m.id === object.target))
-      return "所选模型已不在 Codex 可见目录中";
+    if (!state.connection.connected) return state.connection.reason;
     return "";
   }
   function objectStatus(object) {
+    const pending = pendingActions.get(object.id);
+    if (pending)
+      return `<span class="status" role="status" aria-live="polite">${escape(t(pending.text))}</span>`;
     const kind =
       state.running === object.id
         ? "running"
@@ -331,7 +347,7 @@
           ? state.objects
               .map(
                 (o) =>
-                  `<section class="card"><div class="cardhead flex between"><div><h2>${escape(o.name)}</h2><small class="mono">${escape(o.target)} <span class="tag">${escape(o.effort || "默认")}</span> <span class="tag">${escape(t(backendName(o)))}</span></small></div><div class="flex">${objectStatus(o)}${button("全部历史", "history", `data-id="${o.id}"`, "small")}${button(o.enabled ? "暂停" : "启用", "toggle", `data-id="${o.id}" ${o.needsConversion ? "disabled" : ""}`, "small")}${button("编辑", "edit", `data-id="${o.id}"`, "small")}${button("▷ 执行一轮", "run", `data-id="${o.id}" ${state.busy.includes(o.id) || objectReason(o) ? "disabled" : ""}`, "primary small")}</div></div><div class="cardbody">${objectReason(o) ? `<p class="note">${escape(t(objectReason(o)))}</p>` : ""}<div class="flex between muted"><small>每 ${o.intervalMinutes} 分钟 · ${o.tests.filter((t) => t.enabled).length} 个启用测试项 · 预计 ${Math.round((1440 / o.intervalMinutes) * o.tests.filter((t) => t.enabled).length)} 次/天</small><small>下次 ${time(o.nextAt)}</small></div><div class="object-layout ${o.tests.some((t) => t.kind === "logic") && o.tests.some((t) => t.kind === "drawing") ? "" : "single-column"}">${
+                  `<section class="card"><div class="cardhead flex between"><div><h2>${escape(o.name)}</h2><small class="mono">${escape(o.target)} <span class="tag">${escape(o.effort || "默认")}</span> <span class="tag">${escape(t(backendName(o)))}</span></small></div><div class="flex">${objectStatus(o)}${button("全部历史", "history", `data-id="${o.id}"`, "small")}${button(pendingActions.get(o.id)?.action === "toggle" ? pendingActions.get(o.id).text : o.enabled ? "暂停" : "启用", "toggle", `data-id="${o.id}" aria-busy="${pendingActions.get(o.id)?.action === "toggle"}" ${o.needsConversion || pendingActions.has(o.id) ? "disabled" : ""}`, "small")}${button("编辑", "edit", `data-id="${o.id}" ${pendingActions.has(o.id) ? "disabled" : ""}`, "small")}${runButton(o, null, "primary small")}</div></div><div class="cardbody">${objectReason(o) ? `<p class="note">${escape(t(objectReason(o)))}</p>` : ""}<div class="flex between muted"><small>每 ${o.intervalMinutes} 分钟 · ${o.tests.filter((t) => t.enabled).length} 个启用测试项 · 预计 ${Math.round((1440 / o.intervalMinutes) * o.tests.filter((t) => t.enabled).length)} 次/天</small><small>下次 ${time(o.nextAt)}</small></div><div class="object-layout ${o.tests.some((t) => t.kind === "logic") && o.tests.some((t) => t.kind === "drawing") ? "" : "single-column"}">${
                     o.tests.some((t) => t.kind === "logic")
                       ? `<div>${o.tests
                           .filter((t) => t.kind === "logic")
@@ -375,9 +391,14 @@
     updateCatalogFeedback();
     void fillPreviews($("#app"));
   }
-  async function refresh(force = false) {
-    if (refreshing) return;
-    refreshing = true;
+  function refresh(force = false) {
+    // A mutation needs a new read after any older poll, not that poll's snapshot.
+    if (refreshing)
+      return force ? refreshing.then(() => refresh(true)) : refreshing;
+    refreshing = readState(force);
+    return refreshing;
+  }
+  async function readState(force) {
     try {
       state = await api("state");
       if (!catalogStarted) {
@@ -403,7 +424,7 @@
             "</div>",
         );
     } finally {
-      refreshing = false;
+      refreshing = null;
     }
   }
   function field(label, name, value, type = "text") {
@@ -489,11 +510,8 @@
     picker.querySelector('[data-action="catalog"]').disabled = busy;
     const error =
       catalogError ||
-      (!state.connection.connected
-        ? state.connection.reason
-        : value && !model
-          ? "所选模型已不在 Codex 可见目录中"
-          : "");
+      state.connection.catalogError ||
+      (value && !model ? "所选模型已不在 Codex 可见目录中" : "");
     const status = picker.querySelector(".catalog-status");
     status.textContent = t(busy ? "正在刷新模型目录…" : error);
     status.classList.toggle("warning", !busy && Boolean(error));
@@ -504,9 +522,7 @@
       control = $('[data-action="refresh-catalog"]'),
       feedback = $(".catalog-feedback"),
       connection = $(".catalog-connection-label"),
-      error =
-        catalogError ||
-        (!state.connection.connected ? state.connection.reason : "");
+      error = catalogError || state.connection.catalogError;
     if (control) {
       control.disabled = busy;
       control.setAttribute("aria-busy", String(busy));
@@ -521,19 +537,13 @@
             : "") + `<span>${escape(text)}</span>`;
     }
     if (feedback) {
-      feedback.textContent = t(
-        busy ? "正在检查原生 Codex 接入与模型目录…" : error,
-      );
+      feedback.textContent = t(busy ? "正在刷新模型目录…" : error);
       feedback.hidden = !busy && !error;
       feedback.classList.toggle("warning", !busy && Boolean(error));
     }
     if (connection)
       connection.textContent = t(
-        busy
-          ? "正在刷新…"
-          : state.connection.connected
-            ? "原生 Codex 已接入"
-            : "等待接入",
+        state.connection.connected ? "原生 Codex 已接入" : "等待接入",
       );
   }
   function refreshCatalog() {
@@ -546,8 +556,7 @@
         catalogError = error.message;
         state.connection = {
           ...state.connection,
-          connected: false,
-          reason: error.message,
+          catalogError: error.message,
         };
       } finally {
         catalogRequest = null;
@@ -643,7 +652,7 @@
     modal(
       "监测设置",
       "本地存储与接入",
-      `<div class="detailblock"><h3>${state.connection.connected ? "● 已连接" : "○ 未连接"}</h3><p>${escape(t(state.connection.reason))}</p><small>请在 Magpie Agent 页面接入 Windows 原生 Codex。未知接入模式或目录读取失败时停止新执行，历史仍可查看。</small></div><form id="settingsform" style="margin-top:20px">${field("完整记录保留天数（1–365）", "retentionDays", state.settings.retentionDays, "number")}${field("Magpie CLI 绝对路径（留空自动发现）", "magpiePath", state.settings.magpiePath || "")}${field("Codex CLI 绝对路径（留空自动发现）", "codexPath", state.settings.codexPath || "")}${field("截图浏览器绝对路径（留空查找 Chrome/Edge）", "browserPath", state.settings.browserPath || "")}<p class="note">截图在无头浏览器后台执行，不打开窗口、不读取登录状态、不自动下载浏览器。</p><p class="note">路径仅指定可执行文件，不含参数；插件不修改 Codex 配置，也不回退直连。</p><p class="warning">保存较短保留期会清理到期的完整记录与作品，可先导出 JSON 留档。</p><p class="note">全局串行 · 不自动重试。空档不计模型失败 · 不评价绘图质量。固定题目不用于断言整体能力或供应商换模。</p><p class="note">异常仅在插件内提示，不发送邮件、Webhook 或桌面通知。</p><p class="modalerror" id="formerror"></p><div class="buttonrow">${button("导出历史 JSON", "export")}${button("保存设置", "save-settings", "", "primary")}</div></form>`,
+      `<div class="detailblock"><h3>${state.connection.connected ? "● 已连接" : "○ 未连接"}</h3><p>${escape(t(state.connection.reason))}</p><small>仅检查本地 Codex 的 Magpie 接入声明，不交叉验证网关地址。目录仅用于选择模型；读取失败或目标已移除不阻止执行，实际调用失败会留记录。</small></div><form id="settingsform" style="margin-top:20px">${field("完整记录保留天数（1–365）", "retentionDays", state.settings.retentionDays, "number")}${field("Magpie CLI 绝对路径（留空自动发现）", "magpiePath", state.settings.magpiePath || "")}${field("Codex CLI 绝对路径（留空自动发现）", "codexPath", state.settings.codexPath || "")}${field("截图浏览器绝对路径（留空查找 Chrome/Edge）", "browserPath", state.settings.browserPath || "")}<p class="note">截图在无头浏览器后台执行，不打开窗口、不读取登录状态、不自动下载浏览器。</p><p class="note">路径仅指定可执行文件，不含参数；插件不修改 Codex 配置，也不回退直连。</p><p class="warning">保存较短保留期会清理到期的完整记录与作品，可先导出 JSON 留档。</p><p class="note">全局串行 · 不自动重试。空档不计模型失败 · 不评价绘图质量。固定题目不用于断言整体能力或供应商换模。</p><p class="note">异常仅在插件内提示，不发送邮件、Webhook 或桌面通知。</p><p class="modalerror" id="formerror"></p><div class="buttonrow">${button("导出历史 JSON", "export")}${button("保存设置", "save-settings", "", "primary")}</div></form>`,
     );
   }
   async function saveForm(id, button) {
@@ -689,6 +698,42 @@
       if (objectForm && form.isConnected) updateModelPicker();
     }
   }
+  async function objectAction(b) {
+    const id = b.dataset.id,
+      action = b.dataset.action,
+      object = state.objects.find((o) => o.id === id);
+    if (!object || pendingActions.has(id)) return;
+    pendingActions.set(id, {
+      action,
+      testId: b.dataset.test || "",
+      text:
+        action === "run"
+          ? "正在提交…"
+          : object.enabled
+            ? "正在暂停…"
+            : "正在启用…",
+    });
+    render();
+    try {
+      if (action === "toggle")
+        await api("objects/" + id, "PUT", {
+          ...object,
+          enabled: !object.enabled,
+        });
+      else {
+        await api(
+          "objects/" + id + "/run",
+          "POST",
+          b.dataset.test ? { testId: b.dataset.test } : {},
+        );
+        notify("已加入串行执行队列");
+      }
+      await refresh(true);
+    } finally {
+      pendingActions.delete(id);
+      render();
+    }
+  }
   const actions = {
     close,
     settings,
@@ -717,20 +762,8 @@
       edit(b.dataset.id);
       void refreshCatalog();
     },
-    toggle: async (b) => {
-      const o = state.objects.find((x) => x.id === b.dataset.id);
-      await api("objects/" + o.id, "PUT", { ...o, enabled: !o.enabled });
-      await refresh(true);
-    },
-    run: async (b) => {
-      await api(
-        "objects/" + b.dataset.id + "/run",
-        "POST",
-        b.dataset.test ? { testId: b.dataset.test } : {},
-      );
-      notify("已加入串行执行队列");
-      await refresh(true);
-    },
+    toggle: objectAction,
+    run: objectAction,
     detail: (b) => detail(b.dataset.id),
     "retry-thumbnail": async (b) => {
       b.disabled = true;

@@ -49,15 +49,14 @@ export class Engine {
     }
     if (abort && this.current === id) this.controller?.abort();
   }
-  async enqueue(id: string, testId?: string, refresh = true) {
+  async enqueue(id: string, testId?: string) {
     if (this.stopped || this.error || !this.active())
       throw new HTTPError(503, "调度器不可用");
-    if (refresh) await this.access.refresh();
     const snapshot = this.store.object(id);
     if (!snapshot) throw new HTTPError(404, "对象不存在");
     if (snapshot.backend !== "codex-cli" || snapshot.needsConversion)
       throw new HTTPError(409, "旧直连对象待确认转为 Codex CLI；历史仍保留");
-    this.access.assert(snapshot.target);
+    this.access.assertConnected();
     if (this.stopped || !this.active())
       throw new HTTPError(503, "调度器不可用");
     if (this.pending.has(id))
@@ -89,7 +88,6 @@ export class Engine {
           )
       )
         return;
-      await this.access.refresh(false);
       if (this.stopped || !this.active()) return;
       for (const object of this.store.objects()) {
         if (
@@ -101,7 +99,7 @@ export class Engine {
         )
           continue;
         try {
-          this.access.assert(object.target);
+          this.access.assertConnected();
         } catch {
           continue;
         }
@@ -110,7 +108,7 @@ export class Engine {
         else {
           if (object.nextAt < this.now() - 60000)
             this.event(object.id, "gap", "监测空档；错过的轮次不补跑");
-          await this.enqueue(object.id, undefined, false);
+          await this.enqueue(object.id);
         }
         object.nextAt = this.now() + object.intervalMinutes * 60000;
         this.store.save(object);
@@ -133,7 +131,6 @@ export class Engine {
       while (this.queue.length && !this.stopped) {
         const round = this.queue.shift()!;
         try {
-          await this.access.refresh(false);
           for (const test of round.snapshot.tests.filter((t) =>
             round.testId ? t.id === round.testId : t.enabled,
           )) {
@@ -146,12 +143,12 @@ export class Engine {
             )
               break;
             try {
-              this.access.assert(round.snapshot.target);
+              this.access.assertConnected();
             } catch {
               this.event(
                 round.snapshot.id,
                 "disconnected",
-                "Codex 接入或所选模型不可用，停止后续测试",
+                "Codex 本地接入配置不可用，停止后续测试",
               );
               break;
             }

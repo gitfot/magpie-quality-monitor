@@ -98,6 +98,32 @@ for (const [mode, kind] of [
     }
   }, 15000);
 
+test("a removed model produces failed samples on each scheduled round without pausing", async () => {
+  const f = await cliFixture("model");
+  try {
+    const o = await f.object();
+    writeFileSync(f.catalogFile, "catalog unavailable");
+    expect(
+      (await f.api(`objects/${o.id}`, "PUT", { ...o, enabled: true })).status,
+    ).toBe(200);
+    for (let round = 0; round < 2; round++) {
+      await f.app.tick();
+      await f.app.idle();
+      const state = (await f.api("state")).data;
+      expect(state.objects[0].enabled).toBe(true);
+      expect(state.records).toHaveLength(round + 1);
+      f.setNow(state.objects[0].nextAt);
+    }
+    const records = (await f.api("export")).data.records;
+    expect(records.every((r: any) => r.call === "error")).toBe(true);
+    expect(records.every((r: any) => r.verdict === null)).toBe(true);
+    expect(records.every((r: any) => r.cli.errorKind === "model")).toBe(true);
+    expect(f.receivedAll()).toHaveLength(2);
+  } finally {
+    await f.close();
+  }
+}, 15000);
+
 test("missing usage is unknown; unavailable CLI never starts the gateway transport", async () => {
   const f = await cliFixture("usage-missing");
   try {

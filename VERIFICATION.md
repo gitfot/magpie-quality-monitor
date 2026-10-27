@@ -166,3 +166,38 @@ directory. The shared test fixture now uses at most five filesystem removal
 retries after awaiting resource shutdown. No production renderer or test assertion
 was relaxed. The focused screenshot-deletion test and the subsequent complete
 suite both pass; persistent cleanup errors still fail the test.
+
+## Execution Feedback and Catalog Separation
+
+The model catalog is now selection metadata, not execution authorization.
+Manual runs, enablement, scheduled rounds and queue draining never launch or wait
+for the Magpie catalog CLI. Existing targets can continue running and be edited
+after removal from the catalog; creating a monitor or changing its target still
+requires selection from the loaded catalog, without a synchronous refresh.
+
+Native access checks read local Codex configuration independently of catalog
+loading. They retain supported-home, provider, protocol and configuration-override
+checks, but trust the local Magpie provider declaration. They no longer compare
+the configured gateway address with CLI catalog output or require model IDs to
+appear in that output. This does not independently prove gateway identity.
+Unsupported local access still blocks new executions; it is not recorded as a
+model call failure. Actual Codex call failures remain ungraded failed samples;
+they do not disable the monitor or add plugin-level retries.
+
+Card actions display a pending state and prevent duplicate submissions before
+the API responds. A successful mutation requests a fresh state read after any
+older poll rather than dropping the refresh and waiting for the next interval.
+Failure restores the controls and reports the error without claiming success.
+
+Isolated regressions cover cold-start execution without a catalog, a stalled
+catalog subprocess, removed targets, malformed catalogs, repeated scheduled
+model failures, local disconnects, pending and failed card actions, and an older
+poll racing a successful mutation. The browser race test pauses the polling
+clock, so the UI must update without another five-second interval.
+These tests use temporary configuration and mock CLIs only; they do not deploy
+the changes, alter daily configuration or make real-provider calls.
+
+Verification on Windows on 2026-10-27: typecheck and formatting passed; the full
+isolated suite passed 115 tests with 2 optional installed-binary tests skipped,
+0 failures and 4,049 assertions across 19 files. Privacy-scanner self-tests passed
+all 15 checks, and the working-tree scan reported no configured-rule findings.

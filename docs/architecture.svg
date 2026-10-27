@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1240 900" role="img" aria-labelledby="title desc">
   <title id="title">Magpie Quality Monitor architecture</title>
-  <desc id="desc">Magpie embeds the monitor UI and hosts a local Bun service. A native-access checker gates a serial queue that invokes Codex CLI through the Magpie gateway to a provider or route. Results are locally graded or safely extracted, stored in SQLite and presented as read-only history. A separate headless-browser queue generates static thumbnails without page scripts or external requests.</desc>
+  <desc id="desc">Magpie embeds the monitor UI and hosts a local Bun service. A lightweight local configuration check gates a serial queue that invokes Codex CLI using the locally declared Magpie provider. The gateway address is not independently verified. The CLI catalog is used only for model selection, never execution gating. Results are locally graded or safely extracted, stored in SQLite and presented as read-only history. A separate headless-browser queue generates static thumbnails without page scripts or external requests.</desc>
   <defs>
     <linearGradient id="paper" x2="1" y2="1"><stop stop-color="#f8faf8"/><stop offset="1" stop-color="#edf3f4"/></linearGradient>
     <marker id="blue" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0 8 4 0 8Z" fill="#2e6185"/></marker>
@@ -44,7 +44,7 @@
   <rect x="385" y="323" width="207" height="111" rx="11" class="box"/>
   <text x="403" y="353" class="name">Native-access check</text>
   <text x="403" y="381" class="body">Codex config: read only</text>
-  <text x="403" y="405" class="tiny">Public Magpie CLI catalog</text>
+  <text x="403" y="405" class="tiny">No catalog dependency</text>
   <rect x="619" y="323" width="216" height="111" rx="11" fill="#edf4f8" stroke="#b9cddc"/>
   <text x="637" y="353" class="name">Serial model queue</text>
   <text x="637" y="381" class="body">Scheduled + manual runs</text>

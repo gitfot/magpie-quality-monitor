@@ -137,6 +137,7 @@ const api = async (route: string, method = "GET", body?: unknown) => {
 };
 try {
   await api("settings", "PUT", { retentionDays: 5, codexPath: executable });
+  await api("catalog");
   const o = await api("objects", "POST", {
     name: "CLI smoke",
     backend: "codex-cli",

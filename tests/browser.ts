@@ -83,6 +83,7 @@ export async function embedded(reply?: Parameters<typeof fixture>[0]) {
     await ui
       .getByRole("button", { name: "＋ 新建监测对象", exact: true })
       .waitFor();
+    await ui.locator('[data-action="refresh-catalog"]:enabled').waitFor();
     return {
       f,
       page,
